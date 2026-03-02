@@ -3,6 +3,12 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.gms.google.services)
+
+    id("com.google.dagger.hilt.android")
+
+    id("org.jetbrains.kotlin.plugin.serialization")
+
+    kotlin("kapt")
 }
 
 android {
@@ -62,4 +68,14 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    implementation(libs.exoplayer)
+
+    implementation(libs.hilt.android)
+    kapt(libs.hilt.compiler)
+
+    implementation(libs.kotlinx.serialization.json)
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.database)
+
 }
