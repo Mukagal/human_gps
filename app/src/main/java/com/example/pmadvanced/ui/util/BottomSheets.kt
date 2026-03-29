@@ -15,11 +15,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.pmadvanced.ui.theme.White
 
-/**
- * Created by Charles Raj I on 04/08/24
- * @project FirebaseChatApplication
- * @author Charles Raj
- */
 
 
 @OptIn(ExperimentalMaterial3Api::class)

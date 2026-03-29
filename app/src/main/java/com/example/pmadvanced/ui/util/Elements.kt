@@ -46,45 +46,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/**
- * Created by Charles Raj I on 03/08/24
- * @project FirebaseChatApplication
- * @author Charles Raj
- */
 
-
-
-@Composable
-fun CustomPlayerView(
-    videoFile : Uri,
-    modifier: Modifier
-) {
-
-    val context = LocalContext.current
-    val exoPlayer = remember {
-        SimpleExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(videoFile))
-            prepare()
-            playWhenReady = true
-        }
-    }
-
-    AndroidView(
-        factory = {
-            PlayerView(context).apply {
-                player = exoPlayer
-                useController = true
-                layoutParams = LayoutParams(
-                    LayoutParams.MATCH_PARENT,
-                    LayoutParams.WRAP_CONTENT
-                )
-            }
-        },
-        update = { view ->
-
-        }
-    )
-}
 
 @Composable
 fun HeightSpacer(height : Dp = 10.dp) {
@@ -148,47 +110,6 @@ fun ThemeSolidButton(
     }
 }
 
-@Composable
-fun MobileNumberTextField(
-    label : String,
-    value : String,
-    valueChange : (String) -> Unit
-) {
-    TextField(
-        value = value,
-        onValueChange = valueChange,
-        label = {
-            Text(text = label)
-        },
-        leadingIcon = {
-            Row (
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ){
-                Icon(painter = painterResource(id = R.drawable.contact_icon), contentDescription = "")
-//                WidthSpacer(width = 3.dp)
-//
-            }
-        },
-        prefix = {
-            Text(text = "+1", fontSize = 16.sp)
-        },
-        modifier = Modifier
-            .fillMaxWidth(),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.White,
-            unfocusedIndicatorColor = Color.White,
-            focusedLeadingIconColor = Color.White,
-            unfocusedLeadingIconColor = Color.White,
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            unfocusedLabelColor = Color.White,
-            focusedLabelColor = Color.White
-        )
-    )
-}
 
 @Composable
 fun LeadingIconTextField(
@@ -209,8 +130,6 @@ fun LeadingIconTextField(
                 verticalAlignment = Alignment.CenterVertically
             ){
                 Icon(painter = painterResource(id = leadingIcon), contentDescription = "")
-//                WidthSpacer(width = 3.dp)
-//                Text(text = "+1", fontSize = 16.sp)
             }
         },
         modifier = Modifier

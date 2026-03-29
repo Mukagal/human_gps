@@ -1,48 +1,40 @@
 package com.example.pmadvanced.presenter.ui.main.viewmodel
 
+import android.app.Application
+import android.content.Context
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.pmadvanced.BASE_URL
+import com.example.pmadvanced.data.model.ConversationModel
+import com.example.pmadvanced.data.model.MessageModel
 import com.example.pmadvanced.data.model.UserModel
 import com.example.pmadvanced.presenter.ui.main.event.MainScreenAction
 import com.example.pmadvanced.presenter.ui.main.event.MainScreenEvent
 import com.example.pmadvanced.ui.util.SnackBarState
-import com.google.firebase.Timestamp
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
-import kotlinx.coroutines.CompletableJob
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 
-class MainActivityViewModel : ViewModel() {
+class MainActivityViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val currentUser = FirebaseAuth.getInstance().currentUser
-    private val databaseRef = FirebaseDatabase.getInstance("https://pmadvanced-default-rtdb.asia-southeast1.firebasedatabase.app/")
+    private val prefs = application.getSharedPreferences("auth", Context.MODE_PRIVATE)
+    private val token = prefs.getString("access_token", "") ?: ""
+    private val currentUserId = prefs.getInt("user_id", 0)
 
     private val _snackBarState = MutableStateFlow(SnackBarState())
     val snackBarState: StateFlow<SnackBarState> = _snackBarState.asStateFlow()
 
-    val chatViewModel: ChatViewModel = ChatViewModel()
-
-
     private val _mainScreenEvent = MutableStateFlow(
         MainScreenEvent(
-            currentUser = UserModel(
-                mobileNumber = currentUser?.phoneNumber,
-                userId = currentUser?.uid
-            )
+            currentUser = UserModel(userId = currentUserId)
         )
     )
     val mainScreenEvent: StateFlow<MainScreenEvent> = _mainScreenEvent.asStateFlow()
@@ -50,157 +42,243 @@ class MainActivityViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-//    var chatJob = CompletableJob()
-
     init {
-
-        loadUserList()
+        loadConversations()
     }
-
 
     fun action(event: MainScreenAction) {
-        _isLoading.value = true
         when (event) {
-            is MainScreenAction.SelectUser -> initChat(event)
-            is MainScreenAction.SendMessage -> chatViewModel.sendMessage(event.message){
-                _isLoading.value = false
-                event.callBack(it)
-            }
+            is MainScreenAction.SelectConversation -> loadMessages(event.conversationId, event.otherUser)
+            is MainScreenAction.SelectUser -> createConversation(event.userModel)
+            is MainScreenAction.SearchUsers -> searchUsers(event.query)
+            is MainScreenAction.SendMessage -> sendMessage(event.message, event.callBack)
+            is MainScreenAction.LoadConversations -> loadConversations()
         }
     }
 
 
-    private fun loadUserList() {
+    private fun loadConversations() {
         _isLoading.value = true
         viewModelScope.launch(Dispatchers.IO) {
-            if (currentUser == null) {
-                return@launch
-            }
-            databaseRef.getReference("users")
-                .addListenerForSingleValueEvent(object : ValueEventListener {
-                    override fun onDataChange(snapshot: DataSnapshot) {
-                        val list = mutableListOf<UserModel>()
-                        Log.d("TAG", "onDataChange: ${snapshot.children.count()}")
-                        for (userSnapshot in snapshot.children) {
-                            val userModel = userSnapshot.getValue(UserModel::class.java)
-                            userModel?.let {
-                                if (it.userId != currentUser.uid) {
-                                    list.add(it)
-                                }
-                            }
-                        }
-                        Log.d("TAG", "onDataChange: ${list.toMutableList().size}")
-                        _mainScreenEvent.value = _mainScreenEvent.value.copy(
-                            userList = list.toMutableList()
-                        )
-                        _isLoading.value = false
-                    }
+            try {
+                val url = URL("$BASE_URL/users/$currentUserId/conversations")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.setRequestProperty("Authorization", "Bearer $token")
 
-                    override fun onCancelled(p0: DatabaseError) {
-                        _isLoading.value = false
-                        _snackBarState.value = _snackBarState.value.copy(
-                            show = true,
-                            isError = true,
-                            message = p0.message
-                        )
-                    }
-                })
-        }
-    }
+                if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                    val response = conn.inputStream.bufferedReader().readText()
+                    val jsonArray = JSONArray(response)
+                    val conversations = mutableListOf<ConversationModel>()
+                    Log.d("MainVM", "currentUserId from prefs = $currentUserId")
 
+                    for (i in 0 until jsonArray.length()) {
+                        val item = jsonArray.getJSONObject(i)
+                        val convId = item.getInt("id")
+                        val user1Id = item.getInt("user1_id")
+                        val user2Id = item.getInt("user2_id")
+                        val otherUserId = if (user1Id == currentUserId) user2Id else user1Id
 
-    private fun initChat(event: MainScreenAction.SelectUser) {
-        _mainScreenEvent.value = _mainScreenEvent.value.copy(
-            selectedUser = event.userModel
-        )
+                        Log.d("MainVM", "conv=$convId user1=$user1Id user2=$user2Id currentUser=$currentUserId → fetching otherUser=$otherUserId")
 
-        try {
-            viewModelScope.launch(Dispatchers.IO) {
+                        val otherUser = fetchUser(otherUserId)
 
-                var dataSnapshot = databaseRef.getReference("chats").get().await()
+                        val lastMsg = fetchLastMessage(convId)
 
-                if (dataSnapshot.hasChildren()) {
-                    try {
-                        _isLoading.value = false
-                        var chatId: String? = null
-
-                        for (chatSnapshot in dataSnapshot.children) {
-                            val chatUsers = chatSnapshot.child("users").value as? Map<*, *>
-                            if (chatUsers?.containsKey(event.userModel.userId) == true
-                                && chatUsers.containsKey(_mainScreenEvent.value.currentUser?.userId)) {
-                                chatId = chatSnapshot.key
-                                _mainScreenEvent.value = _mainScreenEvent.value.copy(
-                                    currentChatId = chatId
-                                )
-                                chatViewModel.setChatId(chatId ?: "")
-                                chatViewModel.getMessages {
-                                    _mainScreenEvent.value = _mainScreenEvent.value.copy(
-                                        messagesList = it
-                                    )
-                                }
-                                break
-                            }
-                        }
-
-                        if (chatId == null) {
-                            chatId = dataSnapshot.ref.push().key
-                            val chatData = mapOf(
-                                "${_mainScreenEvent.value.currentUser?.userId}" to true,
-                                "${event.userModel.userId}" to true,
+                        conversations.add(
+                            ConversationModel(
+                                conversationId = convId,
+                                otherUser = otherUser,
+                                lastMessage = lastMsg?.first,
+                                lastMessageTime = lastMsg?.second
                             )
-                            dataSnapshot.ref.child(chatId ?: "").child("users").setValue(chatData)
-                            _mainScreenEvent.value = _mainScreenEvent.value.copy(
-                                currentChatId = chatId
-                            )
-                            chatViewModel.setChatId(chatId ?: "")
-                            chatViewModel.getMessages {
-                                _mainScreenEvent.value = _mainScreenEvent.value.copy(
-                                    messagesList = it
-                                )
-                            }
-                        }
-                    } catch (ex: Exception) {
-                        Log.e("TAG", "onDataChange: ", ex)
+                        )
                     }
 
-                } else {
-                    _isLoading.value = false
-                    val chatId = databaseRef.getReference("chats").push().key
-
-                    val chatData = mapOf(
-                        "${_mainScreenEvent.value.currentUser?.userId}" to true,
-                        "${event.userModel.userId}" to true,
-                    )
-                    dataSnapshot.ref.child(chatId ?: "").child("users").setValue(chatData)
                     _mainScreenEvent.value = _mainScreenEvent.value.copy(
-                        currentChatId = chatId
+                        conversationList = conversations
                     )
                 }
-
-//                databaseRef.getReference("chats")
-//                    .addListenerForSingleValueEvent(object : ValueEventListener{
-//                        override fun onDataChange(dataSnapshot: DataSnapshot) {
-//
-//                        }
-//
-//                        override fun onCancelled(p0: DatabaseError) {
-//                            _isLoading.value = false
-//                        }
-//                    })
-//                }
+            } catch (e: Exception) {
+                Log.e("MainVM", "loadConversations error", e)
+                _snackBarState.value = _snackBarState.value.copy(show = true, isError = true, message = e.message ?: "")
+            } finally {
+                _isLoading.value = false
             }
+        }
+    }
+
+    private fun fetchUser(userId: Int): UserModel? {
+        return try {
+            val url = URL("$BASE_URL/users/$userId/profile")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            val responseCode = conn.responseCode
+            val responseText = conn.inputStream.bufferedReader().readText()
+
+            Log.d("MainVM", "fetchUser($userId) code=$responseCode body=$responseText")
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                val json = JSONObject(responseText)
+                UserModel(
+                    userId = json.getInt("id"),
+                    userName = json.optString("username", ""),
+                    email = json.optString("email", "")
+                )
+            } else null
         } catch (e: Exception) {
-            _isLoading.value = false
-            _snackBarState.value = _snackBarState.value.copy(
-                show = true,
-                isError = true,
-                message = e.message ?: ""
-            )
+            Log.e("MainVM", "fetchUser error", e)
+            null
+        }
+    }
+
+    private fun fetchLastMessage(conversationId: Int): Pair<String, String>? {
+        return try {
+            val url = URL("$BASE_URL/conversations/$conversationId/messages?limit=1")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                val arr = JSONArray(conn.inputStream.bufferedReader().readText())
+                if (arr.length() > 0) {
+                    val msg = arr.getJSONObject(0)
+                    Pair(msg.getString("content"), msg.optString("sent_at", ""))
+                } else null
+            } else null
+        } catch (e: Exception) { null }
+    }
+
+
+    private fun searchUsers(query: String) {
+        _isLoading.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = URL("$BASE_URL/users")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.setRequestProperty("Authorization", "Bearer $token")
+
+                if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                    val jsonArray = JSONArray(conn.inputStream.bufferedReader().readText())
+                    val list = mutableListOf<UserModel>()
+                    for (i in 0 until jsonArray.length()) {
+                        val item = jsonArray.getJSONObject(i)
+                        val id = item.getInt("id")
+                        if (id == currentUserId) continue
+                        val username = item.optString("username", "")
+                        if (query.isBlank() || username.contains(query, ignoreCase = true)) {
+                            list.add(UserModel(userId = id, userName = username, email = item.optString("email")))
+                        }
+                    }
+                    _mainScreenEvent.value = _mainScreenEvent.value.copy(userList = list)
+                }
+            } catch (e: Exception) {
+                Log.e("MainVM", "searchUsers error", e)
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
 
+    private fun createConversation(userModel: UserModel) {
+        _isLoading.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = URL("$BASE_URL/conversations?user_b=${userModel.userId}")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                OutputStreamWriter(conn.outputStream).use { it.write("") }
 
+                if (conn.responseCode == HttpURLConnection.HTTP_OK || conn.responseCode == HttpURLConnection.HTTP_CREATED) {
+                    val json = JSONObject(conn.inputStream.bufferedReader().readText())
+                    val convId = json.getInt("id")
+                    _mainScreenEvent.value = _mainScreenEvent.value.copy(
+                        selectedUser = userModel,
+                        currentConversationId = convId,
+                        messagesList = emptyList()
+                    )
+                    _isLoading.value = false
+                }
+            } catch (e: Exception) {
+                Log.e("MainVM", "createOrOpenConversation error", e)
+                _isLoading.value = false
+            }
+        }
+    }
+
+
+    private fun loadMessages(conversationId: Int, otherUser: UserModel) {
+        _isLoading.value = true
+        _mainScreenEvent.value = _mainScreenEvent.value.copy(
+            currentConversationId = conversationId,
+            selectedUser = otherUser,
+            messagesList = emptyList()
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = URL("$BASE_URL/conversations/$conversationId/messages")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.setRequestProperty("Authorization", "Bearer $token")
+
+                if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                    val arr = JSONArray(conn.inputStream.bufferedReader().readText())
+                    val messages = mutableListOf<MessageModel>()
+                    for (i in 0 until arr.length()) {
+                        val item = arr.getJSONObject(i)
+                        messages.add(
+                            MessageModel(
+                                messageId = item.getInt("id"),
+                                text = item.getString("content"),
+                                senderId = item.getInt("sender_id"),
+                                timeStamp = item.optString("sent_at", "")
+                            )
+                        )
+                    }
+                    _mainScreenEvent.value = _mainScreenEvent.value.copy(messagesList = messages)
+                }
+            } catch (e: Exception) {
+                Log.e("MainVM", "loadMessages error", e)
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+
+    private fun sendMessage(message: String, callBack: (Boolean) -> Unit) {
+        val convId = _mainScreenEvent.value.currentConversationId ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = URL("$BASE_URL/conversations/$convId/messages")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+
+                val body = JSONObject().apply { put("content", message) }.toString()
+                OutputStreamWriter(conn.outputStream).use { it.write(body) }
+
+                if (conn.responseCode == HttpURLConnection.HTTP_OK || conn.responseCode == HttpURLConnection.HTTP_CREATED) {
+                    val json = JSONObject(conn.inputStream.bufferedReader().readText())
+                    val newMessage = MessageModel(
+                        messageId = json.getInt("id"),
+                        text = json.getString("content"),
+                        senderId = json.getInt("sender_id"),
+                        timeStamp = json.optString("sent_at", "")
+                    )
+                    val updated = (_mainScreenEvent.value.messagesList ?: emptyList()) + newMessage
+                    _mainScreenEvent.value = _mainScreenEvent.value.copy(messagesList = updated)
+                    callBack(true)
+                } else {
+                    callBack(false)
+                }
+            } catch (e: Exception) {
+                Log.e("MainVM", "sendMessage error", e)
+                callBack(false)
+            }
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()

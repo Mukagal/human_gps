@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,31 +23,38 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import com.example.pmadvanced.R
 import com.example.pmadvanced.data.model.UserModel
 import com.example.pmadvanced.presenter.ui.main.MainActivityNavigationNames
 import com.example.pmadvanced.presenter.ui.main.event.MainScreenAction
 import com.example.pmadvanced.presenter.ui.main.event.MainScreenEvent
+import com.example.pmadvanced.presenter.ui.main.viewmodel.ProfileViewModel
 import com.example.pmadvanced.ui.theme.Black
 import com.example.pmadvanced.ui.theme.White
 import com.example.pmadvanced.ui.util.HeightSpacer
-import com.example.pmadvanced.ui.util.ImageCircle
 import com.example.pmadvanced.ui.util.WidthSpacer
+import coil.compose.AsyncImage
 
 @Composable
 fun MainScreen(
     navController: NavHostController,
     mainScreenEvent: State<MainScreenEvent>,
-    action: (MainScreenAction) -> Unit
+    action: (MainScreenAction) -> Unit,
+    onRefresh: () -> Unit,
+    profileViewModel: ProfileViewModel
 ) {
 
     BoxWithConstraints(
@@ -68,20 +76,27 @@ fun MainScreen(
             ) {
                 HeightSpacer()
                 Text(
-                    text = "Chat-U",
+                    text = "Maman-Tap",
                     fontWeight = FontWeight.Bold,
                     fontSize = 24.sp,
                     color = White
                 )
 
-                Image(
-                    painter = painterResource(id = R.drawable.person_icon),
-                    contentDescription = "",
+                Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .background(color = White, shape = CircleShape)
-                        .padding(5.dp)
-                )
+                        .clip(CircleShape)
+                        .clickable { navController.navigate(MainActivityNavigationNames.PROFILE_SCREEN) }
+                ) {
+                    val myPhoto = profileViewModel.profile.collectAsState().value?.profileImage
+                    if (!myPhoto.isNullOrBlank()) {
+                        AsyncImage(model = myPhoto, contentDescription = "", contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize())
+                    } else {
+                        Image(painter = painterResource(id = R.drawable.person_icon), contentDescription = "",
+                            modifier = Modifier.fillMaxSize().background(White, CircleShape).padding(5.dp))
+                    }
+                }
             }
 
 
@@ -93,12 +108,17 @@ fun MainScreen(
                     .padding(horizontal = 20.dp)
             )
             HeightSpacer()
-            mainScreenEvent.value.userList?.let { list ->
+            mainScreenEvent.value.conversationList?.let { list ->
                 LazyColumn {
                     items(list.size){ index ->
-                    val userItem = list[index]
-                    ChatItem(userItem){
-                        action(MainScreenAction.SelectUser(userItem))
+                    val conv = list[index]
+                    ChatItem(
+                        userItem = conv.otherUser ?: UserModel(),
+                        lastMessage = conv.lastMessage ?: "No message yet",
+                        navController = navController,
+                        otherUserId = conv.otherUser?.userId)
+                    {
+                        action(MainScreenAction.SelectConversation( conv.conversationId, conv.otherUser ?: UserModel()))
                         navController.navigate(MainActivityNavigationNames.CHAT_SCREEN)
                     }
                 }
@@ -109,7 +129,9 @@ fun MainScreen(
 
 
         FloatingActionButton(
-            onClick = { /*TODO*/ },
+            onClick = {
+                navController.navigate(MainActivityNavigationNames.SEARCH_SCREEN)
+            },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(15.dp),
@@ -126,9 +148,14 @@ fun MainScreen(
 }
 
 
-
 @Composable
-fun ChatItem(userItem: UserModel, onClick: () -> Unit) {
+fun ChatItem(
+    userItem: UserModel,
+    lastMessage: String = "No message yet",
+    navController: NavController,
+    otherUserId: Int? = null,
+    onClick: () -> Unit
+) {
     Column (
         modifier = Modifier
             .fillMaxWidth()
@@ -150,21 +177,38 @@ fun ChatItem(userItem: UserModel, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Start,
                 modifier = Modifier
-//                    .fillMaxWidth()
-//                    .padding(horizontal = 20.dp, vertical = 10.dp)
+                   .fillMaxWidth()
+                   .padding(horizontal = 20.dp, vertical = 10.dp)
             ) {
 
-                ImageCircle()
+                Box(
+                    modifier = Modifier
+                        .size(50.dp)
+                        .clip(CircleShape)
+                        .clickable {
+                            otherUserId?.let {
+                                navController.navigate("${MainActivityNavigationNames.PROFILE_SCREEN}/$it")
+                            }
+                        }
+                ) {
+                    val photo = userItem.profileImage
+                    if (!photo.isNullOrBlank()) {
+                        AsyncImage(model = photo, contentDescription = "", contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize())
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize().background(Color.DarkGray),
+                            contentAlignment = Alignment.Center) {
+                            Icon(painter = painterResource(R.drawable.person_icon), contentDescription = "", tint = White)
+                        }
+                    }
+                }
 
                 WidthSpacer(width = 20.dp)
 
                 Column(
                     horizontalAlignment = Alignment.Start,
                     verticalArrangement = Arrangement.Top,
-//                modifier = Modifier.fillMaxSize()
-                    modifier = Modifier
-                        .height(80.dp)
-                        .padding(top = 10.dp)
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     Text(
                         text = userItem.userName ?: "",
@@ -173,7 +217,7 @@ fun ChatItem(userItem: UserModel, onClick: () -> Unit) {
                     )
                     HeightSpacer(height = 10.dp)
                     Text(
-                        text = "Hey, What's Up?",
+                        text = lastMessage,
                         fontSize = 16.sp,
                         color = Color.Gray
                     )
@@ -206,5 +250,4 @@ fun ChatItem(userItem: UserModel, onClick: () -> Unit) {
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun MainScreenPreview() {
-//    MainScreen(mainActivityViewModel.userList.collectAsState())
 }

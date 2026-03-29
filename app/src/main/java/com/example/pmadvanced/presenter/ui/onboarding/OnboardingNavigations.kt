@@ -29,78 +29,69 @@ import com.example.pmadvanced.presenter.ui.onboarding.screens.OnboardingScreen
 import com.example.pmadvanced.presenter.ui.onboarding.screens.SignUpScreen
 import kotlinx.coroutines.launch
 
-
 object OnboardingNavigationObject {
     const val ONBOARDING_SCREEN = "ONBOARDING_SCREEN"
     const val LOGIN_SCREEN = "LOGIN_SCREEN"
     const val SIGNUP_SCREEN = "SIGNUP_SCREEN"
-
 }
 
-
-
 @Composable
-fun OnboardingNavigation(onboardingViewModel: OnboardingViewModel) {
-
+fun OnboardingNavigation(
+    onboardingViewModel: OnboardingViewModel,
+    onLoginSuccess: (token: String, userId: Int) -> Unit
+) {
     val navController = rememberNavController()
-//    val view Loca\
-
     val scope = rememberCoroutineScope()
-    val snackBarHostState = remember {
-        SnackbarHostState()
-    }
+    val snackBarHostState = remember { SnackbarHostState() }
     val snackBarState by onboardingViewModel.snackBarState.collectAsState()
 
     Scaffold(
-        snackbarHost = {
-            SnackbarHost(hostState = snackBarHostState)
-        },
+        snackbarHost = { SnackbarHost(hostState = snackBarHostState) }
     ) { paddingValues ->
         val it = paddingValues
-        NavHost(navController = navController,
-            startDestination = OnboardingNavigationObject.ONBOARDING_SCREEN)
-        {
-            composable(
-                route = OnboardingNavigationObject.ONBOARDING_SCREEN
-            ) {
-                OnboardingScreen(
-                    navController
-                )
-            }
-            composable(
-                route = OnboardingNavigationObject.LOGIN_SCREEN
-            ) {
-                LoginScreen(
-                    navController,
-                    onboardingViewModel::action
-                )
-            }
 
-            composable(
-                route = OnboardingNavigationObject.SIGNUP_SCREEN
-            ) {
-                SignUpScreen(
-                    navController,
-                    onboardingViewModel::action
-                )
+        NavHost(
+            navController = navController,
+            startDestination = OnboardingNavigationObject.ONBOARDING_SCREEN
+        ) {
+            composable(OnboardingNavigationObject.ONBOARDING_SCREEN) {
+                OnboardingScreen(navController)
             }
-
+            composable(OnboardingNavigationObject.LOGIN_SCREEN) {
+                LoginScreen(navController) { event ->
+                    if (event is OnboardingEvents.LoginClick) {
+                        onboardingViewModel.action(OnboardingEvents.LoginClick(event.userModel) { status ->
+                            if (status) {
+                                onLoginSuccess(
+                                    onboardingViewModel.accessToken,
+                                    onboardingViewModel.currentUserId
+                                )
+                            }
+                            event.status(status)
+                        })
+                    } else {
+                        onboardingViewModel.action(event)
+                    }
+                }
+            }
+            composable(OnboardingNavigationObject.SIGNUP_SCREEN) {
+                SignUpScreen(navController, onboardingViewModel::action)
+            }
         }
 
-       LaunchedEffect(key1 = snackBarState.show) {
-           scope.launch {
-               if (snackBarState.show){
-                   snackBarHostState.showSnackbar(
-                       message = snackBarState.message,
-                       if(snackBarState.isError) "Error" else "Success",
-                       duration = SnackbarDuration.Short
-                   )
-               }
+        LaunchedEffect(key1 = snackBarState.show) {
+            scope.launch {
+                if (snackBarState.show) {
+                    snackBarHostState.showSnackbar(
+                        message = snackBarState.message,
+                        actionLabel = if (snackBarState.isError) "Error" else "Success",
+                        duration = SnackbarDuration.Short
+                    )
+                }
+            }
+        }
 
-           }
-       }
-
-        if (onboardingViewModel.isLoading.collectAsState().value){
+        if (onboardingViewModel.isLoading.collectAsState().value) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -116,6 +107,5 @@ fun OnboardingNavigation(onboardingViewModel: OnboardingViewModel) {
                 )
             }
         }
-
     }
 }

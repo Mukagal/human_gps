@@ -30,7 +30,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.pmadvanced.presenter.ui.main.viewmodel.MainActivityViewModel
 import com.example.pmadvanced.ui.theme.PmAdvancedTheme
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -38,11 +37,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val mainActivityViewModel: MainActivityViewModel by viewModels<MainActivityViewModel>()
-
-//            val loading = mainActivityViewModel
-
-            var currentUser = FirebaseAuth.getInstance().currentUser
+            val mainActivityViewModel: MainActivityViewModel by viewModels()
 
             val scope = rememberCoroutineScope()
             val snackBarHostState = remember {

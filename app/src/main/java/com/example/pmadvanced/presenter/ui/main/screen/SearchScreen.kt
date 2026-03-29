@@ -17,90 +17,98 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import com.example.pmadvanced.presenter.ui.main.MainActivityNavigationNames
+import com.example.pmadvanced.presenter.ui.main.event.MainScreenAction
+import com.example.pmadvanced.presenter.ui.main.event.MainScreenEvent
 import com.example.pmadvanced.ui.theme.White
 import com.example.pmadvanced.ui.util.HeightSpacer
 import com.example.pmadvanced.ui.util.WidthSpacer
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 
 @Composable
-fun SearchScreen() {
+fun SearchScreen(
+    mainScreenEvent: State<MainScreenEvent>,
+    action: (MainScreenAction) -> Unit,
+    navController: NavController
+) {
+    LaunchedEffect(Unit) {
+        action(MainScreenAction.SearchUsers(""))
+    }
 
-    Column (
+    var searchQuery by remember { mutableStateOf("") }
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(color = Color.Black),
-        verticalArrangement = Arrangement.SpaceBetween
-    ){
-        Column (
+        verticalArrangement = Arrangement.Top  
+    ) {
+        Row(
             modifier = Modifier
-//                .fillMaxSize()
-                .background(color = Color.Black)
+                .fillMaxWidth()
+                .padding(vertical = 15.dp, horizontal = 20.dp),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row (
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 15.dp, horizontal = 20.dp),
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.ArrowBack,
-                    contentDescription = "",
-                    tint = White
-                )
-                WidthSpacer()
-                Text(text = "Search", color = White, fontSize = 20.sp)
-            }
-
-
+            Icon(
+                imageVector = Icons.Filled.ArrowBack,
+                contentDescription = "",
+                tint = White,
+                modifier = Modifier.clickable { navController.popBackStack() }  
+            )
+            WidthSpacer()
+            Text(text = "Search", color = White, fontSize = 20.sp)
         }
 
         OutlinedTextField(
-            value = "",
-            onValueChange = {},
+            value = searchQuery,
+            onValueChange = {
+                searchQuery = it
+                action(MainScreenAction.SearchUsers(it)) 
+            },
             colors = OutlinedTextFieldDefaults.colors(
                 unfocusedBorderColor = White,
-                focusedBorderColor = White
+                focusedBorderColor = White,
+                focusedTextColor = White,
+                unfocusedTextColor = White
             ),
             modifier = Modifier
-                .height(50.dp)
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-
-            ,
+                .padding(horizontal = 20.dp),
             shape = RoundedCornerShape(25.dp),
-            label = {
-                Text(text = "Search User", color = Color.Gray)
-            }
+            label = { Text(text = "Search User", color = Color.Gray) }
         )
 
-        HeightSpacer(height = 20.dp)
+        HeightSpacer(height = 10.dp)
 
         LazyColumn(
-            reverseLayout = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            items(3){
-//                ChatItem(userItem)
+            items(mainScreenEvent.value.userList?.size ?: 0) { index ->
+                val user = mainScreenEvent.value.userList!![index]
+                ChatItem(
+                    userItem = user,
+                    navController = navController,
+                    otherUserId = user.userId
+                ) {
+                    action(MainScreenAction.SelectUser(user))
+                    navController.navigate(MainActivityNavigationNames.CHAT_SCREEN)
+                }
             }
         }
-
     }
-
-
-
-
-}
-
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun SearchScreenPreview() {
-    SearchScreen()
 }

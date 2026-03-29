@@ -1,46 +1,36 @@
 package com.example.pmadvanced.presenter.ui.onboarding
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import com.example.pmadvanced.presenter.ui.FirebaseApp
 import com.example.pmadvanced.presenter.ui.main.MainActivity
-import com.google.firebase.auth.FirebaseAuth
 
 class OnboardingActivity : ComponentActivity() {
 
-    val onboardingViewModel: OnboardingViewModel by viewModels<OnboardingViewModel>()
-
-    var currentUser = FirebaseAuth.getInstance().currentUser
+    val onboardingViewModel: OnboardingViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (currentUser != null) {
-            this.startActivity(Intent(this, MainActivity::class.java).apply {
-            })
+
+        val prefs = getSharedPreferences("auth", Context.MODE_PRIVATE)
+        val savedToken = prefs.getString("access_token", null)
+
+        if (!savedToken.isNullOrEmpty()) {
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+            return
         }
+
         setContent {
-            OnboardingNavigation(onboardingViewModel)
+            OnboardingNavigation(onboardingViewModel) { token, userId ->
+                prefs.edit()
+                    .putString("access_token", token)
+                    .putInt("user_id", userId)
+                    .apply()
+            }
         }
-
     }
-
-    override fun onResume() {
-        super.onResume()
-    }
-
-    override fun onPause() {
-        super.onPause()
-    }
-
-    override fun onStop() {
-        super.onStop()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-    }
-
 }

@@ -35,9 +35,7 @@ import com.example.pmadvanced.data.model.UserModel
 import com.example.pmadvanced.presenter.ui.onboarding.OnboardingEvents
 import com.example.pmadvanced.presenter.ui.onboarding.OnboardingNavigationObject
 import com.example.pmadvanced.ui.util.HeightSpacer
-import com.example.pmadvanced.ui.util.MobileNumberTextField
 import com.example.pmadvanced.ui.util.ThemeSolidButton
-import com.example.pmadvanced.ui.util.WidthSpacer
 import androidx.compose.foundation.clickable
 import android.content.Intent
 import androidx.compose.foundation.layout.Box
@@ -74,15 +72,13 @@ fun LoginScreen(navController: NavHostController, action: (OnboardingEvents) -> 
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.chat_u_logo),
-                    contentDescription = "chat u logo",
+                    contentDescription = "Maman-Tap",
                     modifier = Modifier
                         .width(150.dp)
                         .offset(x = -(20.dp))
                 )
                 HeightSpacer()
-                Text(text = "Ready to Chat?", color = Color.White, fontSize = 24.sp)
-                HeightSpacer()
-                Text(text = "Sign in to pick up right where you left off.", color = Color.White, fontSize = 12.sp)
+                Text(text = "Ready to Help?", color = Color.White, fontSize = 24.sp)
                 HeightSpacer(height = 60.dp)
 
                 LeadingIconTextField(
@@ -122,7 +118,7 @@ fun LoginScreen(navController: NavHostController, action: (OnboardingEvents) -> 
                     horizontalArrangement = Arrangement.End
                 ) {
                     ThemeSolidButton(
-                        text = "Login",  // ← renamed from "Send Otp"
+                        text = "Login", 
                         modifier = Modifier.fillMaxWidth(fraction = 0.6f)
                     ) {
                         action(OnboardingEvents.LoginClick(userModel) { status ->

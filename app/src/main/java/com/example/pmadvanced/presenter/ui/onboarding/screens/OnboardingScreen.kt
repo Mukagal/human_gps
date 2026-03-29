@@ -31,18 +31,8 @@ import com.example.pmadvanced.ui.util.ThemeButton
 import com.example.pmadvanced.ui.util.ThemeSolidButton
 import com.example.pmadvanced.ui.util.WidthSpacer
 
-/**
- * Created by Charles Raj I on 03/08/24
- * @project FirebaseChatApplication
- * @author Charles Raj
- */
 @Composable
 fun OnboardingScreen(navController: NavHostController) {
-
-
-//    CustomPlayerView(
-//        videoFile = RawResourceDataSource.buildRawResourceUri(R.raw.globe_video),
-//        modifier = Modifier.fillMaxWidth())
 
     BoxWithConstraints(
         modifier = Modifier
@@ -96,22 +86,16 @@ fun OnboardingScreen(navController: NavHostController) {
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.chat_u_logo),
-                    contentDescription = "chat u logo",
+                    contentDescription = "Maman-Tap logo",
                     modifier = Modifier
                         .width(150.dp)
                         .offset(x = -(20.dp))
                 )
             HeightSpacer()
                 Text(
-                    text = "Welcome to Chat-U!",
+                    text = "Welcome to Maman-Tap!",
                     color = Color.White,
                     fontSize = 24.sp
-                )
-                HeightSpacer()
-                Text(
-                    text = "Chat securely with anyone, anywhere, and enjoy seamless conversations.",
-                    color = Color.White,
-                    fontSize = 12.sp
                 )
                 HeightSpacer(height = 80.dp)
                 

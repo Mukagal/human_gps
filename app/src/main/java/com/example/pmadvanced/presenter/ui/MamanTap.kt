@@ -5,7 +5,7 @@ import dagger.hilt.android.HiltAndroidApp
 
 
 @HiltAndroidApp
-class FirebaseApp : Application() {
+class MamanTapApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
