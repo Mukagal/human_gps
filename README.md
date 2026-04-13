@@ -1,4 +1,4 @@
-# Maman-Tap 🤝
+# Maman-Tap 
 
 > A community-driven social platform for connecting people, sharing posts, and requesting help — built with FastAPI and Kotlin.
 
@@ -55,7 +55,14 @@ In many communities, people struggle to find help nearby or connect with others 
 ---
 
 ## Demo
-
+![LoginPage.jpg](app/DemoAssets/LoginPage.jpg)
+![MyConversations.jpg](app/DemoAssets/MyConversations.jpg)
+![MyProfile.jpg](app/DemoAssets/MyProfile.jpg)
+![requestingHelp.jpg](app/DemoAssets/requestingHelp.jpg)
+![MyRequests.jpg](app/DemoAssets/MyRequests.jpg)
+![MyRequestsCompleted.jpg](app/DemoAssets/MyRequestsCompleted.jpg)
+![RateService.jpg](app/DemoAssets/RateService.jpg)
+![NearByUsers.jpg](app/DemoAssets/NearByUsers.jpg)
 
 ## Installation
 
