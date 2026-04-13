@@ -212,4 +212,43 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
             applications = apps
         )
     }
+    fun completeRequest(requestId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = URL("$BASE_URL/requests/$requestId/complete")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                    _uiState.value = _uiState.value.copy(successMessage = "Request marked as completed!")
+                    loadMyRequests()
+                }
+            } catch (e: Exception) { Log.e("KomekVM", "completeRequest", e) }
+        }
+    }
+
+    fun submitRating(targetUserId: Int, requestId: Int, rating: Int, comment: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = URL("$BASE_URL/ratings")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                val body = JSONObject().apply {
+                    put("target_user_id", targetUserId)
+                    put("request_id", requestId)
+                    put("rating", rating)
+                    put("comment", comment ?: "")
+                }.toString()
+                OutputStreamWriter(conn.outputStream).use { it.write(body) }
+                if (conn.responseCode == HttpURLConnection.HTTP_CREATED) {
+                    _uiState.value = _uiState.value.copy(successMessage = "Rating submitted!")
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message)
+            }
+        }
+    }
 }

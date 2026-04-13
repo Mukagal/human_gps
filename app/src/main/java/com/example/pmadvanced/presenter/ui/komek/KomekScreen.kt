@@ -8,7 +8,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,7 +31,8 @@ fun KomekScreen(currentUserId: Int?) {
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var showCreateDialog by remember { mutableStateOf(false) }
-    var showApplyDialog by remember { mutableStateOf<Int?>(null) } 
+    var showApplyDialog by remember { mutableStateOf<Int?>(null) }
+    var showRatingDialog by remember { mutableStateOf<Pair<Int, Int>?>(null) } // targetUserId to requestId
 
     val tabs = listOf("All Requests", "My Requests")
 
@@ -80,7 +82,9 @@ fun KomekScreen(currentUserId: Int?) {
                         currentUserId = currentUserId,
                         onCancel = { viewModel.cancelRequest(it) },
                         onAccept = { reqId, appId -> viewModel.acceptApplication(reqId, appId) },
-                        onReject = { reqId, appId -> viewModel.rejectApplication(reqId, appId) }
+                        onReject = { reqId, appId -> viewModel.rejectApplication(reqId, appId) },
+                        onComplete = { viewModel.completeRequest(it) },
+                        onRate = { targetUserId, requestId -> showRatingDialog = targetUserId to requestId }
                     )
                 }
             }
@@ -126,6 +130,16 @@ fun KomekScreen(currentUserId: Int?) {
             }
         )
     }
+
+    showRatingDialog?.let { (targetUserId, requestId) ->
+        RatingDialog(
+            onDismiss = { showRatingDialog = null },
+            onSubmit = { rating, comment ->
+                viewModel.submitRating(targetUserId, requestId, rating, comment)
+                showRatingDialog = null
+            }
+        )
+    }
 }
 
 @Composable
@@ -159,7 +173,9 @@ fun MyRequestsTab(
     currentUserId: Int?,
     onCancel: (Int) -> Unit,
     onAccept: (Int, Int) -> Unit,
-    onReject: (Int, Int) -> Unit
+    onReject: (Int, Int) -> Unit,
+    onComplete: (Int) -> Unit,
+    onRate: (Int, Int) -> Unit
 ) {
     if (requests.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -172,11 +188,14 @@ fun MyRequestsTab(
                     request = req,
                     currentUserId = currentUserId,
                     showApplyButton = false,
-                    showCancelButton = req.status in listOf("open", "in_progress"),
+                    showCancelButton = req.status == "open",
                     onCancel = { onCancel(req.id) },
+                    showCompleteButton = req.status == "in_progress",
+                    onComplete = { onComplete(req.id) },
                     showApplications = true,
                     onAccept = { appId -> onAccept(req.id, appId) },
-                    onReject = { appId -> onReject(req.id, appId) }
+                    onReject = { appId -> onReject(req.id, appId) },
+                    onRate = onRate
                 )
             }
         }
@@ -189,11 +208,14 @@ fun RequestCard(
     currentUserId: Int?,
     showApplyButton: Boolean = false,
     showCancelButton: Boolean = false,
+    showCompleteButton: Boolean = false,
     showApplications: Boolean = false,
     onApply: () -> Unit = {},
     onCancel: () -> Unit = {},
+    onComplete: () -> Unit = {},
     onAccept: (Int) -> Unit = {},
-    onReject: (Int) -> Unit = {}
+    onReject: (Int) -> Unit = {},
+    onRate: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val statusColor = when (request.status) {
         "open" -> Color(0xFF4CAF50)
@@ -245,6 +267,13 @@ fun RequestCard(
                         shape = RoundedCornerShape(8.dp)
                     ) { Text("Cancel") }
                 }
+                if (showCompleteButton) {
+                    Button(
+                        onClick = onComplete,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50), contentColor = Color.White),
+                        shape = RoundedCornerShape(8.dp)
+                    ) { Text("Mark Completed") }
+                }
             }
 
             if (showApplications && request.applications.isNotEmpty()) {
@@ -253,7 +282,13 @@ fun RequestCard(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Applications (${request.applications.size})", color = Color.Gray, fontSize = 12.sp)
                 request.applications.forEach { app ->
-                    ApplicationItem(app = app, onAccept = { onAccept(app.id) }, onReject = { onReject(app.id) })
+                    ApplicationItem(
+                        app = app,
+                        showRateButton = request.status == "completed" && app.status == "accepted",
+                        onAccept = { onAccept(app.id) },
+                        onReject = { onReject(app.id) },
+                        onRate = { onRate(app.applicantId, request.id) }
+                    )
                 }
             }
         }
@@ -261,7 +296,13 @@ fun RequestCard(
 }
 
 @Composable
-fun ApplicationItem(app: HelpApplication, onAccept: () -> Unit, onReject: () -> Unit) {
+fun ApplicationItem(
+    app: HelpApplication,
+    showRateButton: Boolean = false,
+    onAccept: () -> Unit,
+    onReject: () -> Unit,
+    onRate: () -> Unit = {}
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -277,7 +318,13 @@ fun ApplicationItem(app: HelpApplication, onAccept: () -> Unit, onReject: () -> 
                 TextButton(onClick = onReject) { Text("Reject", color = Color.Red) }
             }
         } else {
-            Text(app.status, color = Color.Gray, fontSize = 12.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(app.status, color = Color.Gray, fontSize = 12.sp)
+                if (showRateButton) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = onRate) { Text("Rate", color = Color(0xFFFFC107)) }
+                }
+            }
         }
     }
 }
@@ -334,6 +381,51 @@ fun CreateRequestDialog(onDismiss: () -> Unit, onCreate: (String, String, String
                 enabled = title.length >= 3 && description.length >= 10,
                 colors = ButtonDefaults.buttonColors(containerColor = White, contentColor = Color.Black)
             ) { Text("Create") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = Color.Gray) }
+        }
+    )
+}
+
+@Composable
+fun RatingDialog(onDismiss: () -> Unit, onSubmit: (Int, String?) -> Unit) {
+    var rating by remember { mutableIntStateOf(5) }
+    var comment by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1A1A1A),
+        title = { Text("Rate Service", color = White) },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    (1..5).forEach { i ->
+                        IconButton(onClick = { rating = i }) {
+                            Icon(
+                                imageVector = if (i <= rating) Icons.Filled.Star else Icons.Filled.StarBorder,
+                                contentDescription = "$i Stars",
+                                tint = if (i <= rating) Color(0xFFFFC107) else Color.Gray
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = comment, onValueChange = { comment = it },
+                    label = { Text("Leave a comment (optional)", color = Color.Gray) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = White, unfocusedTextColor = White,
+                        focusedBorderColor = White, unfocusedBorderColor = Color.Gray
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSubmit(rating, comment.takeIf { it.isNotBlank() }) },
+                colors = ButtonDefaults.buttonColors(containerColor = White, contentColor = Color.Black)
+            ) { Text("Submit") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel", color = Color.Gray) }
