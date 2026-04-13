@@ -55,14 +55,20 @@ In many communities, people struggle to find help nearby or connect with others 
 ---
 
 ## Demo
-![LoginPage.jpg](app/DemoAssets/LoginPage.jpg)
-![MyConversations.jpg](app/DemoAssets/MyConversations.jpg)
-![MyProfile.jpg](app/DemoAssets/MyProfile.jpg)
-![requestingHelp.jpg](app/DemoAssets/requestingHelp.jpg)
-![MyRequests.jpg](app/DemoAssets/MyRequests.jpg)
-![MyRequestsCompleted.jpg](app/DemoAssets/MyRequestsCompleted.jpg)
-![RateService.jpg](app/DemoAssets/RateService.jpg)
-![NearByUsers.jpg](app/DemoAssets/NearByUsers.jpg)
+
+<p align="center">
+  <img src="app/DemoAssets/LoginPage.jpg" width="22%" style="margin:5px;" />
+  <img src="app/DemoAssets/MyConversations.jpg" width="22%" style="margin:5px;" />
+  <img src="app/DemoAssets/MyProfile.jpg" width="22%" style="margin:5px;" />
+  <img src="app/DemoAssets/requestingHelp.jpg" width="22%" style="margin:5px;" />
+</p>
+
+<p align="center">
+  <img src="app/DemoAssets/MyRequests.jpg" width="22%" style="margin:5px;" />
+  <img src="app/DemoAssets/MyRequestsCompleted.jpg" width="22%" style="margin:5px;" />
+  <img src="app/DemoAssets/RateService.jpg" width="22%" style="margin:5px;" />
+  <img src="app/DemoAssets/NearByUsers.jpg" width="22%" style="margin:5px;" />
+</p>
 
 ## Installation
 
@@ -70,6 +76,27 @@ In many communities, people struggle to find help nearby or connect with others 
 - Python 3.10+
 - Android Studio (for mobile)
 
+### Backend — Local without Docker
+
+# 1. Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Set up .env file
+
+# Fill in DATABASE_URL, REDIS_URL, JWT_SECRET, etc.
+
+# 4. Run migrations
+alembic upgrade head
+
+# 5. Start FastAPI
+uvicorn src:app --reload
+
+# 6. Start Celery worker (separate terminal)
+python -m celery -A src.celery worker --loglevel=INFO --pool=solo
 
 ### Environment Variables
 
@@ -81,7 +108,7 @@ DATABASE_URL=postgresql+asyncpg://...
 REDIS_URL=redis://...
 
 # JWT
-JWT_SECRET=your_secret_key
+JWT_SECRET=
 JWT_ALGORITHM=HS256
 REFRESH_TOKEN_EXPIRY=7
 
@@ -102,74 +129,7 @@ MAIL_FROM_NAME=Maman-Tap
 SIGHTENGINE_API_USER=
 SIGHTENGINE_API_SECRET=
 ```
-
 ---
-
-## Usage
-
-### API Endpoints Overview
-
-#### Auth
-```
-POST   /api/v1/signup                     Register (no email verification)
-POST   /api/v1/signup-with-verification   Register with email confirmation
-POST   /api/v1/login                      Login → returns access + refresh tokens
-POST   /api/v1/logout                     Invalidate token
-POST   /api/v1/refresh                    Refresh access token
-GET    /api/v1/verify-email?token=...     Verify email
-POST   /api/v1/forgot-password            Request password reset
-POST   /api/v1/reset-password             Reset password with token
-```
-
-#### Users
-```
-GET    /api/v1/users                      List users (search by username)
-GET    /api/v1/users/me                   Get current user
-PATCH  /api/v1/users/me                   Update profile
-DELETE /api/v1/users/me                   Delete account
-POST   /api/v1/users/me/profile-image     Upload profile image
-PATCH  /api/v1/users/me/location          Update location
-GET    /api/v1/users/nearby               Find nearby users
-```
-
-#### Posts
-```
-GET    /api/v1/posts                      Feed (sort by latest/likes/comments)
-POST   /api/v1/posts                      Create post (with optional image)
-PATCH  /api/v1/posts/{id}                 Update post
-DELETE /api/v1/posts/{id}                 Delete post
-POST   /api/v1/posts/{id}/like            Like post
-DELETE /api/v1/posts/{id}/like            Unlike post
-POST   /api/v1/posts/{id}/comments        Add comment
-POST   /api/v1/posts/{id}/share           Share post to conversation/group
-```
-
-#### Conversations & Messages
-```
-POST   /api/v1/conversations              Start conversation
-GET    /api/v1/users/{id}/conversations   List conversations
-POST   /api/v1/conversations/{id}/messages  Send message
-GET    /api/v1/conversations/{id}/messages  Get messages
-PATCH  /api/v1/messages/{id}              Edit message
-DELETE /api/v1/messages/{id}              Delete message
-```
-
-#### Komek (Help Requests)
-```
-POST   /api/v1/komek/requests             Create help request
-GET    /api/v1/komek/requests             Browse requests (filter by category)
-POST   /api/v1/komek/requests/{id}/apply  Apply to help
-PATCH  /api/v1/komek/applications/{id}    Accept or reject application
-```
-
-#### Groups
-```
-POST   /api/v1/groups                     Create group
-GET    /api/v1/groups/{id}                Get group info
-POST   /api/v1/groups/{id}/members        Add member
-DELETE /api/v1/groups/{id}/members/{uid}  Remove member
-POST   /api/v1/groups/{id}/messages       Send group message
-```
 
 ---
 
