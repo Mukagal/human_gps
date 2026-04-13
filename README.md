@@ -6,7 +6,7 @@
 
 ## Problem Statement
 
-In many communities, people struggle to find help nearby or connect with others around them. Maman-Tap solves this by providing a mobile-first platform where users can post updates, chat with each other, request or offer help, and discover people near their location — all in one place.
+In many cоmmunities, people struggle to find help nearby or connect with others around them. Maman-Tap solves this by providing a mobile-first platform where users can post updates, chat with each other, request or offer help, and discover people near their location — all in one place.
 
 ---
 

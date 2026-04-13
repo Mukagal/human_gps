@@ -6,7 +6,7 @@
 The README.md file is now comprehensive and well-structured, including a clear project title and description, problem statement, features list, detailed installation steps, usage instructions, technology stack, and references to screenshots. It provides all necessary information for developers to understand, set up, and use the project effectively.
 
 ### Folder Structure
-The repository has a well-organized folder structure with a `src/` directory containing logical submodules (conversations, db, groups, komek, messages, middleware, post, story, tasks, users). The `migrations/` folder for database migrations is appropriately placed. However, there are some inconsistencies, such as "middlware" instead of "middleware" and a typo in "tasks/__init__,py" (comma instead of period).
+The repository hаs a well-organized folder structure with a `src/` directory containing logical submodules (conversations, db, groups, komek, messages, middleware, post, story, tasks, users). The `migrations/` folder for database migrations is appropriately placed. However, there are some inconsistencies, such as "middlware" instead of "middleware" and a typo in "tasks/__init__,py" (comma instead of period).
 
 ### File Naming Consistency
 File naming is generally consistent with PascalCase for class-like files (e.g., KomekRoutes.py, KomekSchemas.py) and snake_case for some others. However, the folder "middlware" should be "middleware" . Overall, mostly consistent but with minor errors.
