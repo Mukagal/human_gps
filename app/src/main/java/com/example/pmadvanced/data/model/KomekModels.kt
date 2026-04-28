@@ -14,6 +14,7 @@ data class HelpRequest(
 data class HelpApplication(
     val id: Int,
     val applicantId: Int,
+    val applicantUsername: String?,
     val message: String?,
     val status: String
 )

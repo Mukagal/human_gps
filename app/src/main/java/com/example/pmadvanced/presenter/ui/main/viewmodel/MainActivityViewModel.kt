@@ -267,7 +267,9 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
                         senderId = json.getInt("sender_id"),
                         timeStamp = json.optString("sent_at", "")
                     )
-                    val updated = (_mainScreenEvent.value.messagesList ?: emptyList()) + newMessage
+                    // Chat UI uses reverseLayout=true, so newest message must be inserted at index 0.
+                    // Appending puts it visually at the top until full reload.
+                    val updated = listOf(newMessage) + (_mainScreenEvent.value.messagesList ?: emptyList())
                     _mainScreenEvent.value = _mainScreenEvent.value.copy(messagesList = updated)
                     callBack(true)
                 } else {

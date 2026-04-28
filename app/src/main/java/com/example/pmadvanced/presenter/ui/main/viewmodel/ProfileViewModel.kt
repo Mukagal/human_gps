@@ -43,6 +43,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _comments = MutableStateFlow<List<CommentModel>>(emptyList())
     val comments: StateFlow<List<CommentModel>> = _comments.asStateFlow()
 
+    private val _averageRating = MutableStateFlow<Double?>(null)
+    val averageRating: StateFlow<Double?> = _averageRating.asStateFlow()
+
+    private val _totalRatings = MutableStateFlow(0)
+    val totalRatings: StateFlow<Int> = _totalRatings.asStateFlow()
+
     fun loadProfile(userId: Int = currentUserId) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -63,10 +69,39 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         profileImage = json.optString("profile_image_path")
                             .takeIf { it.isNotBlank() && it != "null" }
                     )
+                    loadUserRating(userId)
                     loadPosts(userId)
                 }
             } catch (e: Exception) {
                 Log.e("ProfileVM", "loadProfile error", e)
+            }
+        }
+    }
+
+    fun logout() {
+        prefs.edit().clear().apply()
+    }
+
+    private fun loadUserRating(userId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = URL("$BASE_URL/users/$userId/ratings")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    val responseText = conn.inputStream.bufferedReader().readText()
+                    val json = JSONObject(responseText)
+                    _averageRating.value = json.optDouble("average_rating", 0.0)
+                    _totalRatings.value = json.optInt("total_ratings", 0)
+                } else {
+                    _averageRating.value = null
+                    _totalRatings.value = 0
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileVM", "loadUserRating error", e)
+                _averageRating.value = null
+                _totalRatings.value = 0
             }
         }
     }

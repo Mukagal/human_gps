@@ -197,6 +197,7 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
             apps.add(HelpApplication(
                 id = a.getInt("id"),
                 applicantId = a.getInt("applicant_id"),
+                applicantUsername = a.optString("applicant_username").takeIf { it.isNotBlank() && it != "null" },
                 message = a.optString("message").takeIf { it.isNotBlank() },
                 status = a.getString("status")
             ))

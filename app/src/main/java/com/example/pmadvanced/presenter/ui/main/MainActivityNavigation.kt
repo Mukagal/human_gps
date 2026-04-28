@@ -123,7 +123,7 @@ fun MainActivityNavigation(mainActivityViewModel: MainActivityViewModel) {
             }
             composable (KOMEK_SCREEN){backStackEntry ->
                 val userId = backStackEntry.arguments?.getInt("userId")
-                KomekScreen(userId)
+                KomekScreen(userId, navController)
             }
         }
     }

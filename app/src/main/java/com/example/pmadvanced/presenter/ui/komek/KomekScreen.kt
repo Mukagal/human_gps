@@ -19,13 +19,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import com.example.pmadvanced.data.model.HelpApplication
 import com.example.pmadvanced.data.model.HelpRequest
+import com.example.pmadvanced.presenter.ui.main.MainActivityNavigationNames
 import com.example.pmadvanced.presenter.ui.komek.KomekViewModel
 import com.example.pmadvanced.ui.theme.White
 
 @Composable
-fun KomekScreen(currentUserId: Int?) {
+fun KomekScreen(currentUserId: Int?, navController: NavHostController) {
     val viewModel: KomekViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
 
@@ -80,6 +82,7 @@ fun KomekScreen(currentUserId: Int?) {
                     1 -> MyRequestsTab(
                         requests = uiState.myRequests,
                         currentUserId = currentUserId,
+                        navController = navController,
                         onCancel = { viewModel.cancelRequest(it) },
                         onAccept = { reqId, appId -> viewModel.acceptApplication(reqId, appId) },
                         onReject = { reqId, appId -> viewModel.rejectApplication(reqId, appId) },
@@ -171,6 +174,7 @@ fun AllRequestsTab(
 fun MyRequestsTab(
     requests: List<HelpRequest>,
     currentUserId: Int?,
+    navController: NavHostController,
     onCancel: (Int) -> Unit,
     onAccept: (Int, Int) -> Unit,
     onReject: (Int, Int) -> Unit,
@@ -195,6 +199,9 @@ fun MyRequestsTab(
                     showApplications = true,
                     onAccept = { appId -> onAccept(req.id, appId) },
                     onReject = { appId -> onReject(req.id, appId) },
+                    onOpenApplicantProfile = { applicantId ->
+                        navController.navigate("${MainActivityNavigationNames.PROFILE_SCREEN}/$applicantId")
+                    },
                     onRate = onRate
                 )
             }
@@ -215,6 +222,7 @@ fun RequestCard(
     onComplete: () -> Unit = {},
     onAccept: (Int) -> Unit = {},
     onReject: (Int) -> Unit = {},
+    onOpenApplicantProfile: (Int) -> Unit = {},
     onRate: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val statusColor = when (request.status) {
@@ -285,6 +293,9 @@ fun RequestCard(
                     ApplicationItem(
                         app = app,
                         showRateButton = request.status == "completed" && app.status == "accepted",
+                        onOpenApplicantProfile = {
+                            onOpenApplicantProfile(app.applicantId)
+                        },
                         onAccept = { onAccept(app.id) },
                         onReject = { onReject(app.id) },
                         onRate = { onRate(app.applicantId, request.id) }
@@ -299,6 +310,7 @@ fun RequestCard(
 fun ApplicationItem(
     app: HelpApplication,
     showRateButton: Boolean = false,
+    onOpenApplicantProfile: () -> Unit = {},
     onAccept: () -> Unit,
     onReject: () -> Unit,
     onRate: () -> Unit = {}
@@ -309,7 +321,16 @@ fun ApplicationItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("Applicant #${app.applicantId}", color = White, fontSize = 13.sp)
+            TextButton(
+                onClick = onOpenApplicantProfile,
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text(
+                    text = app.applicantUsername ?: "Applicant #${app.applicantId}",
+                    color = White,
+                    fontSize = 13.sp
+                )
+            }
             app.message?.let { Text(it, color = Color.Gray, fontSize = 12.sp) }
         }
         if (app.status == "pending") {

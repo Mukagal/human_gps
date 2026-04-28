@@ -1,5 +1,6 @@
 package com.example.pmadvanced.presenter.ui.main.screen
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
@@ -32,15 +34,15 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.pmadvanced.R
 import com.example.pmadvanced.data.model.PostModel
+import com.example.pmadvanced.presenter.ui.onboarding.OnboardingActivity
 import com.example.pmadvanced.presenter.ui.main.viewmodel.ProfileViewModel
 import com.example.pmadvanced.ui.theme.Gray
 import com.example.pmadvanced.ui.theme.White
 import com.example.pmadvanced.ui.util.HeightSpacer
 import com.example.pmadvanced.ui.util.WidthSpacer
-import coil.compose.AsyncImage
 import com.example.pmadvanced.presenter.ui.main.event.MainScreenAction
 import com.example.pmadvanced.presenter.ui.main.event.MainScreenEvent
-import com.example.pmadvanced.presenter.ui.main.viewmodel.MainActivityViewModel
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +60,8 @@ fun ProfileScreen(
     val profile by profileViewModel.profile.collectAsState()
     val posts by profileViewModel.posts.collectAsState()
     val comments by profileViewModel.comments.collectAsState()
+    val averageRating by profileViewModel.averageRating.collectAsState()
+    val totalRatings by profileViewModel.totalRatings.collectAsState()
 
     var showEditDialog by remember { mutableStateOf(false) }
     var showPostDialog by remember { mutableStateOf(false) }
@@ -210,21 +214,39 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 15.dp, horizontal = 20.dp),
-                horizontalArrangement = Arrangement.Start,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Filled.ArrowBack,
-                    contentDescription = "",
-                    tint = White,
-                    modifier = Modifier.clickable { navController.popBackStack() }
-                )
-                WidthSpacer()
-                Text(
-                    text = if (isOwnProfile) "My Profile" else profile?.userName ?: "Profile",
-                    color = White,
-                    fontSize = 20.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowBack,
+                        contentDescription = "",
+                        tint = White,
+                        modifier = Modifier.clickable { navController.popBackStack() }
+                    )
+                    WidthSpacer()
+                    Text(
+                        text = if (isOwnProfile) "My Profile" else profile?.userName ?: "Profile",
+                        color = White,
+                        fontSize = 20.sp
+                    )
+                }
+                if (isOwnProfile) {
+                    OutlinedButton(
+                        onClick = {
+                            profileViewModel.logout()
+                            val intent = Intent(context, OnboardingActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            }
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.height(30.dp),
+                        shape = RoundedCornerShape(15.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                        border = BorderStroke(1.dp, Color.Red),
+                        contentPadding = PaddingValues(horizontal = 12.dp)
+                    ) { Text("Log out", fontSize = 12.sp) }
+                }
             }
 
             Row(
@@ -263,6 +285,19 @@ fun ProfileScreen(
 
                 Column {
                     Text(text = profile?.userName ?: "Loading…", fontSize = 20.sp, color = White)
+                    val ratingText = averageRating?.let {
+                        "${((it * 10.0).roundToInt() / 10.0)} ($totalRatings)"
+                    } ?: "No ratings yet"
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = "Rating",
+                            tint = Color(0xFFFFC107),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        WidthSpacer(width = 4.dp)
+                        Text(text = ratingText, fontSize = 13.sp, color = Color(0xFFFFC107))
+                    }
                     HeightSpacer(height = 4.dp)
                     Text(text = profile?.email ?: "", fontSize = 13.sp, color = Color.Gray)
                     if (isOwnProfile) {
@@ -277,6 +312,29 @@ fun ProfileScreen(
                             colors = ButtonDefaults.buttonColors(contentColor = White, containerColor = Gray),
                             contentPadding = PaddingValues(horizontal = 12.dp)
                         ) { Text("Edit", fontSize = 12.sp) }
+                    } else {
+                        HeightSpacer(height = 6.dp)
+                        Button(
+                            onClick = {
+                                val otherUser = profile ?: return@Button
+                                val target = com.example.pmadvanced.data.model.UserModel(
+                                    userId = otherUser.userId,
+                                    userName = otherUser.userName,
+                                    profileImage = otherUser.profileImage,
+                                    email = otherUser.email
+                                )
+                                action(MainScreenAction.SelectUser(target))
+                                navController.navigate(com.example.pmadvanced.presenter.ui.main.MainActivityNavigationNames.CHAT_SCREEN)
+                            },
+                            enabled = profile?.userId != null,
+                            modifier = Modifier.height(32.dp),
+                            shape = RoundedCornerShape(15.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = White,
+                                contentColor = Color.Black
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp)
+                        ) { Text("Start message", fontSize = 12.sp) }
                     }
                 }
             }
