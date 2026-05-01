@@ -94,7 +94,8 @@ fun MainActivityNavigation(mainActivityViewModel: MainActivityViewModel) {
                     navController,
                     mainActivityViewModel.mainScreenEvent.collectAsState(),
                     mainActivityViewModel::action,
-                    profileViewModel = profileViewModel
+                    profileViewModel = profileViewModel,
+                    mainActivityViewModel = mainActivityViewModel  // add this
                 )
             }
 
