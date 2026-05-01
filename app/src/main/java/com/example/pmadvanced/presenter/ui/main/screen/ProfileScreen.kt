@@ -35,6 +35,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.pmadvanced.R
 import com.example.pmadvanced.data.model.PostModel
+import com.example.pmadvanced.data.model.UserModel
 import com.example.pmadvanced.presenter.ui.onboarding.OnboardingActivity
 import com.example.pmadvanced.presenter.ui.main.viewmodel.ProfileViewModel
 import com.example.pmadvanced.ui.theme.Gray
@@ -54,6 +55,7 @@ fun ProfileScreen(
     action: (MainScreenAction) -> Unit,
     mainScreenEvent: State<MainScreenEvent>,
     ) {
+
     val context = LocalContext.current
     val isOwnProfile = userId == null || userId == profileViewModel.currentUserId
     val targetUserId = userId ?: profileViewModel.currentUserId
@@ -73,6 +75,9 @@ fun ProfileScreen(
     var selectedPostForShare by remember { mutableStateOf<PostModel?>(null) }
     var commentText by remember { mutableStateOf("") }
     var shareConversationId by remember { mutableStateOf("") }
+    var showProfessionsDialog by remember { mutableStateOf(false) }
+    var editableProfessions by remember { mutableStateOf<List<String>>(emptyList()) }
+    var newProfessionText by remember { mutableStateOf("") }
 
     LaunchedEffect(targetUserId) {
         profileViewModel.loadProfile(targetUserId)
@@ -301,25 +306,48 @@ fun ProfileScreen(
                     }
                     HeightSpacer(height = 4.dp)
                     Text(text = profile?.email ?: "", fontSize = 13.sp, color = Color.Gray)
+                    HeightSpacer(height = 4.dp)
+                    profile?.professions?.takeIf { it.isNotEmpty() }?.let { profs ->
+                        HeightSpacer(height = 6.dp)
+                        Text(
+                            text = profs.joinToString(" · "),
+                            fontSize = 12.sp,
+                            color = Color(0xFFAAAAAA)
+                        )
+                    }
+                    HeightSpacer(height = 4.dp)
                     if (isOwnProfile) {
                         HeightSpacer(height = 6.dp)
-                        Button(
-                            onClick = {
-                                newUsername = profile?.userName ?: ""
-                                showEditDialog = true
-                            },
-                            modifier = Modifier.height(30.dp),
-                            shape = RoundedCornerShape(15.dp),
-                            colors = ButtonDefaults.buttonColors(contentColor = White, containerColor = Gray),
-                            contentPadding = PaddingValues(horizontal = 12.dp)
-                        ) { Text("Edit", fontSize = 12.sp) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    newUsername = profile?.userName ?: ""
+                                    showEditDialog = true
+                                },
+                                modifier = Modifier.height(30.dp),
+                                shape = RoundedCornerShape(15.dp),
+                                colors = ButtonDefaults.buttonColors(contentColor = White, containerColor = Gray),
+                                contentPadding = PaddingValues(horizontal = 12.dp)
+                            ) { Text("Edit", fontSize = 12.sp) }
+
+                            Button(
+                                onClick = {
+                                    editableProfessions = profile?.professions ?: emptyList()
+                                    showProfessionsDialog = true
+                                },
+                                modifier = Modifier.height(30.dp),
+                                shape = RoundedCornerShape(15.dp),
+                                colors = ButtonDefaults.buttonColors(contentColor = White, containerColor = Gray),
+                                contentPadding = PaddingValues(horizontal = 12.dp)
+                            ) { Text("Professions", fontSize = 12.sp) }
+                        }
                     } else {
                         HeightSpacer(height = 6.dp)
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = {
                                     val otherUser = profile ?: return@Button
-                                    val target = com.example.pmadvanced.data.model.UserModel(
+                                    val target = UserModel(
                                         userId = otherUser.userId,
                                         userName = otherUser.userName,
                                         profileImage = otherUser.profileImage,
@@ -417,6 +445,65 @@ fun ProfileScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showEditDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showProfessionsDialog) {
+        AlertDialog(
+            onDismissRequest = { showProfessionsDialog = false },
+            title = { Text("My Professions") },
+            text = {
+                Column {
+                    editableProfessions.forEach { profession ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(text = profession, fontSize = 14.sp)
+                            TextButton(onClick = {
+                                editableProfessions = editableProfessions - profession
+                            }) {
+                                Text("✕", color = Color.Red)
+                            }
+                        }
+                        HorizontalDivider(thickness = 0.5.dp)
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = newProfessionText,
+                            onValueChange = { newProfessionText = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("e.g. Guitar Tutor") },
+                            singleLine = true
+                        )
+                        Button(onClick = {
+                            val trimmed = newProfessionText.trim()
+                            if (trimmed.isNotBlank() && !editableProfessions.contains(trimmed)) {
+                                editableProfessions = editableProfessions + trimmed
+                                newProfessionText = ""
+                            }
+                        }) { Text("Add") }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    profileViewModel.updateProfessions(editableProfessions)
+                    showProfessionsDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showProfessionsDialog = false }) { Text("Cancel") }
             }
         )
     }

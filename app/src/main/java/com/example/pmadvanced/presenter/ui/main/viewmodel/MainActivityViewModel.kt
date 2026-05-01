@@ -43,7 +43,6 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    // Polling jobs — cancelled when leaving the screen or ViewModel is cleared
     private var conversationPollingJob: Job? = null
     private var messagePollingJob: Job? = null
 
@@ -73,7 +72,6 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    // ─── Polling ────────────────────────────────────────────────────────────────
 
     private fun startConversationPolling() {
         conversationPollingJob?.cancel()
@@ -85,7 +83,6 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    /** Poll for new messages in the currently open chat every 3 s */
     private fun startMessagePolling(conversationId: Int) {
         messagePollingJob?.cancel()
         messagePollingJob = viewModelScope.launch(Dispatchers.IO) {
@@ -96,7 +93,6 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    /** Stop message polling when the user leaves the chat screen */
     fun stopMessagePolling() {
         messagePollingJob?.cancel()
         messagePollingJob = null
@@ -138,10 +134,6 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    /**
-     * Core conversation-fetch logic shared by both the initial load and the poller.
-     * Returns conversations sorted by lastMessageTime descending (newest chat on top).
-     */
     private fun fetchConversations(): MutableList<ConversationModel>? {
         val url = URL("$BASE_URL/users/$currentUserId/conversations")
         val conn = url.openConnection() as HttpURLConnection
@@ -182,7 +174,6 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
         return conversations
     }
 
-    // ─── Messages ───────────────────────────────────────────────────────────────
 
     private fun loadMessages(conversationId: Int, otherUser: UserModel) {
         _isLoading.value = true

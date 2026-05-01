@@ -2,6 +2,7 @@ package com.example.pmadvanced.presenter.ui.komek
 
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -77,7 +78,7 @@ fun KomekScreen(currentUserId: Int?, navController: NavHostController) {
                         requests = uiState.openRequests,
                         currentUserId = currentUserId,
                         onApply = { showApplyDialog = it },
-                        onRefresh = { viewModel.loadOpenRequests() }
+                        navController = navController
                     )
                     1 -> MyRequestsTab(
                         requests = uiState.myRequests,
@@ -150,7 +151,7 @@ fun AllRequestsTab(
     requests: List<HelpRequest>,
     currentUserId: Int?,
     onApply: (Int) -> Unit,
-    onRefresh: () -> Unit
+    navController: NavHostController
 ) {
     if (requests.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -164,7 +165,8 @@ fun AllRequestsTab(
                     request = req,
                     currentUserId = currentUserId,
                     showApplyButton = req.requesterId != currentUserId,
-                    onApply = { onApply(req.id) }
+                    onApply = { onApply(req.id) },
+                    onRequesterClick = { navController.navigate("${MainActivityNavigationNames.PROFILE_SCREEN}/${req.requesterId}")}
                 )
             }
         }
@@ -225,6 +227,7 @@ fun RequestCard(
     onAccept: (Int) -> Unit = {},
     onReject: (Int) -> Unit = {},
     onOpenApplicantProfile: (Int) -> Unit = {},
+    onRequesterClick: (Int) -> Unit = {},
     onRate: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val statusColor = when (request.status) {
@@ -247,6 +250,16 @@ fun RequestCard(
             ) {
                 Text(request.title, color = White, fontSize = 16.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f))
+                if(!showApplications)
+                    Text(
+                        text = "by ${request.requesterUsername ?: "User #${request.requesterId}"}",
+                        fontSize = 12.sp,
+                        color = Color(0xFF90CAF9),
+                        modifier = Modifier.clickable {
+                            onRequesterClick(request.requesterId)
+                        }
+                    )
+
                 Surface(shape = RoundedCornerShape(8.dp), color = statusColor.copy(alpha = 0.2f)) {
                     Text(request.status, color = statusColor, fontSize = 11.sp,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))

@@ -205,6 +205,7 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
         return HelpRequest(
             id = obj.getInt("id"),
             requesterId = obj.getInt("requester_id"),
+            requesterUsername = obj.optString("requester_username").takeIf { it.isNotBlank() && it != "null" } ,
             title = obj.getString("title"),
             description = obj.getString("description"),
             category = obj.getString("category"),

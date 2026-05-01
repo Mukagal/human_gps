@@ -21,6 +21,7 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.serialization.json.Json
 
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -67,7 +68,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         userName = json.optString("username"),
                         email = json.optString("email"),
                         profileImage = json.optString("profile_image_path")
-                            .takeIf { it.isNotBlank() && it != "null" }
+                            .takeIf { it.isNotBlank() && it != "null" },
+                        professions = Json.decodeFromString(json.optString("professions"))
                     )
                     loadUserRating(userId)
                     loadPosts(userId)
@@ -128,6 +130,41 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     if (responseCode == HttpURLConnection.HTTP_OK) {
                         loadProfile(currentUserId)
                         _snackBarState.value = SnackBarState(show = true, isError = false, message = "Username updated!")
+                    } else {
+                        _snackBarState.value = SnackBarState(show = true, isError = true, message = "Update failed")
+                    }
+                }
+            } catch (e: Exception) {
+                viewModelScope.launch(Dispatchers.Main) {
+                    _isLoading.value = false
+                    _snackBarState.value = SnackBarState(show = true, isError = true, message = e.message ?: "Error")
+                }
+            }
+        }
+    }
+
+    fun updateProfessions(professions: List<String>) {
+        _isLoading.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = URL("$BASE_URL/users/me")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "PATCH"
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                val body = JSONObject().apply {
+                    put("professions", org.json.JSONArray(professions))
+                }
+                OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+                val responseCode = conn.responseCode
+                conn.inputStream.bufferedReader().readText()
+
+                viewModelScope.launch(Dispatchers.Main) {
+                    _isLoading.value = false
+                    if (responseCode == HttpURLConnection.HTTP_OK) {
+                        loadProfile(currentUserId)
+                        _snackBarState.value = SnackBarState(show = true, isError = false, message = "Professions updated!")
                     } else {
                         _snackBarState.value = SnackBarState(show = true, isError = true, message = "Update failed")
                     }

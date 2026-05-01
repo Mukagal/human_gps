@@ -1,5 +1,6 @@
 package com.example.pmadvanced.presenter.ui.main.screen
 
+import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -47,6 +48,8 @@ import com.example.pmadvanced.data.model.MessageModel
 import com.example.pmadvanced.presenter.ui.main.MainActivityNavigationNames
 import com.example.pmadvanced.presenter.ui.main.event.MainScreenAction
 import com.example.pmadvanced.presenter.ui.main.event.MainScreenEvent
+import com.example.pmadvanced.presenter.ui.main.formatDayHeader
+import com.example.pmadvanced.presenter.ui.main.formatMessageTime
 import com.example.pmadvanced.presenter.ui.main.viewmodel.MainActivityViewModel
 import com.example.pmadvanced.presenter.ui.main.viewmodel.ProfileViewModel
 import com.example.pmadvanced.ui.theme.White
@@ -59,19 +62,16 @@ fun ChatScreen(
     mainScreenEvent: State<MainScreenEvent>,
     action: (MainScreenAction) -> Unit,
     profileViewModel: ProfileViewModel,
-    // Pass the viewModel so we can stop polling on back
     mainActivityViewModel: MainActivityViewModel
 ) {
     val messageText = remember { mutableStateOf("") }
 
-    // Stop message polling when the screen leaves composition
     DisposableEffect(Unit) {
         onDispose {
             mainActivityViewModel.stopMessagePolling()
         }
     }
 
-    // Also handle hardware back press
     BackHandler {
         mainActivityViewModel.stopMessagePolling()
         navController.popBackStack()
@@ -154,20 +154,28 @@ fun ChatScreen(
             HorizontalDivider(thickness = 1.dp, color = Color.Gray)
         }
 
-        // reverseLayout=true + ascending list = newest message shown at bottom ✓
         LazyColumn(
             reverseLayout = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            // Reverse the list for display so the newest item is index 0 for reverseLayout
             val messages = mainScreenEvent.value.messagesList?.reversed() ?: emptyList()
-            messages.forEach { item ->
-                if (item.senderId == mainScreenEvent.value.currentUser?.userId) {
-                    item { SendChatItem(item) }
-                } else {
-                    item { ReceiveChatItem(item) }
+
+            val grouped = messages.groupBy { it.timeStamp?.substringBefore("T") }
+            grouped.forEach { (day, dayMessages) ->
+                dayMessages.forEach { msg ->
+                    if (msg.senderId == mainScreenEvent.value.currentUser?.userId) item { SendChatItem(msg) }
+                    else item { ReceiveChatItem(msg) }
+                }
+                item {
+                    Text(
+                        text = formatDayHeader(day ?: ""),
+                        color = Color.Gray,
+                        fontSize = 12.sp,
+                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }
@@ -222,6 +230,7 @@ fun ChatScreen(
     }
 }
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun SendChatItem(item: MessageModel) {
     BoxWithConstraints(
@@ -232,29 +241,23 @@ fun SendChatItem(item: MessageModel) {
         Column(
             modifier = Modifier
                 .fillMaxWidth(fraction = 0.8f)
+                .background(color = White, shape = RoundedCornerShape(10.dp))
+                .padding(vertical = 10.dp, horizontal = 10.dp)
                 .align(Alignment.CenterEnd)
         ) {
+            Text(text = item.text ?: "", color = Color.Black, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
             Text(
-                text = item.text ?: "",
-                color = Color.Black,
+                text = formatMessageTime(item.timeStamp ?: ""),
+                color = Color.DarkGray,
+                fontSize = 9.sp,
                 textAlign = TextAlign.End,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(color = White, shape = RoundedCornerShape(10.dp))
-                    .padding(vertical = 15.dp, horizontal = 10.dp)
-            )
-            HeightSpacer(height = 5.dp)
-            Text(
-                text = item.timeStamp ?: "",
-                color = Color.Gray,
-                fontSize = 8.sp,
-                textAlign = TextAlign.Start,
-                modifier = Modifier.padding(start = 5.dp)
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
 }
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun ReceiveChatItem(item: MessageModel) {
     BoxWithConstraints(
@@ -265,26 +268,16 @@ fun ReceiveChatItem(item: MessageModel) {
         Column(
             modifier = Modifier
                 .fillMaxWidth(fraction = 0.8f)
-                .align(Alignment.CenterStart)
+                .background(color = White, shape = RoundedCornerShape(10.dp))
+                .padding(vertical = 10.dp, horizontal = 10.dp)
         ) {
+            Text(text = item.text ?: "", color = Color.Black, textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth())
             Text(
-                text = item.text ?: "",
-                color = Color.Black,
+                text = formatMessageTime(item.timeStamp ?: ""),
+                color = Color.DarkGray,
+                fontSize = 9.sp,
                 textAlign = TextAlign.Start,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(color = Color.Gray, shape = RoundedCornerShape(10.dp))
-                    .padding(vertical = 15.dp, horizontal = 10.dp)
-            )
-            HeightSpacer(height = 5.dp)
-            Text(
-                text = item.timeStamp ?: "",
-                color = Color.Gray,
-                fontSize = 8.sp,
-                textAlign = TextAlign.End,
-                modifier = Modifier
-                    .padding(end = 5.dp)
-                    .fillMaxWidth()
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }

@@ -3,6 +3,7 @@ package com.example.pmadvanced.data.model
 data class HelpRequest(
     val id: Int,
     val requesterId: Int,
+    val requesterUsername: String? = null,
     val title: String,
     val description: String,
     val category: String,
