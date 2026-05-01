@@ -192,15 +192,11 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
                 if (conn.responseCode == HttpURLConnection.HTTP_OK || conn.responseCode == HttpURLConnection.HTTP_CREATED) {
                     val json = JSONObject(conn.inputStream.bufferedReader().readText())
                     val convId = json.getInt("id")
-                    _mainScreenEvent.value = _mainScreenEvent.value.copy(
-                        selectedUser = userModel,
-                        currentConversationId = convId,
-                        messagesList = emptyList()
-                    )
-                    _isLoading.value = false
+                    loadMessages(convId, userModel)
                 }
             } catch (e: Exception) {
                 Log.e("MainVM", "createOrOpenConversation error", e)
+            } finally {
                 _isLoading.value = false
             }
         }
