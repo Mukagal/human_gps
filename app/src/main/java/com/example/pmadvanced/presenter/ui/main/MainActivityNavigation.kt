@@ -45,7 +45,7 @@ fun MainActivityNavigation(mainActivityViewModel: MainActivityViewModel) {
     Scaffold(
         bottomBar = {
             val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
-            val showBar = currentRoute in listOf("MAIN_SCREEN","PROFILE_SCREEN","MAP_SCREEN", "KOMEK_SCREEN")
+            val showBar = currentRoute in listOf("MAIN_SCREEN","PROFILE_SCREEN","MAP_SCREEN", "$MAP_SCREEN/{userId}", "KOMEK_SCREEN")
             if (showBar) {
                 NavigationBar {items.forEach { item ->
                         NavigationBarItem(
@@ -79,6 +79,14 @@ fun MainActivityNavigation(mainActivityViewModel: MainActivityViewModel) {
             }
             composable(MAP_SCREEN) {
                 MapScreen()
+            }
+
+            composable(
+                route = "$MAP_SCREEN/{userId}",
+                arguments = listOf(navArgument("userId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val userId = backStackEntry.arguments?.getInt("userId")
+                MapScreen(focusUserId = userId)
             }
 
             composable(CHAT_SCREEN) {

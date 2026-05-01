@@ -28,6 +28,12 @@ data class NearbyUser(
     val longitude: Double
 )
 
+data class FocusedMapUser(
+    val id: Int,
+    val latitude: Double,
+    val longitude: Double
+)
+
 class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("auth", Context.MODE_PRIVATE)
@@ -39,10 +45,26 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val _nearbyUsers = MutableStateFlow<List<NearbyUser>>(emptyList())
     val nearbyUsers: StateFlow<List<NearbyUser>> = _nearbyUsers
 
+    private val _focusedUser = MutableStateFlow<FocusedMapUser?>(null)
+    val focusedUser: StateFlow<FocusedMapUser?> = _focusedUser
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
     private val _nearbyRequests = MutableStateFlow<List<NearbyRequest>>(emptyList())
     val nearbyRequests: StateFlow<List<NearbyRequest>> = _nearbyRequests
+
+    fun focusUser(userId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val location = fetchUserProfile(userId)
+            if (location != null) {
+                _focusedUser.value = FocusedMapUser(
+                    id = userId,
+                    latitude = location.first,
+                    longitude = location.second
+                )
+            }
+        }
+    }
 
     fun onLocationObtained(lat: Double, lng: Double) {
         _myLocation.value = LatLng(lat, lng)

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Share
@@ -314,27 +315,51 @@ fun ProfileScreen(
                         ) { Text("Edit", fontSize = 12.sp) }
                     } else {
                         HeightSpacer(height = 6.dp)
-                        Button(
-                            onClick = {
-                                val otherUser = profile ?: return@Button
-                                val target = com.example.pmadvanced.data.model.UserModel(
-                                    userId = otherUser.userId,
-                                    userName = otherUser.userName,
-                                    profileImage = otherUser.profileImage,
-                                    email = otherUser.email
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    val otherUser = profile ?: return@Button
+                                    val target = com.example.pmadvanced.data.model.UserModel(
+                                        userId = otherUser.userId,
+                                        userName = otherUser.userName,
+                                        profileImage = otherUser.profileImage,
+                                        email = otherUser.email
+                                    )
+                                    action(MainScreenAction.SelectUser(target))
+                                    navController.navigate(com.example.pmadvanced.presenter.ui.main.MainActivityNavigationNames.CHAT_SCREEN)
+                                },
+                                enabled = profile?.userId != null,
+                                modifier = Modifier.width(150.dp).height(32.dp),
+                                shape = RoundedCornerShape(15.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = White,
+                                    contentColor = Color.Black
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp)
+                            ) { Text("Start message", fontSize = 12.sp, maxLines = 1) }
+
+                            OutlinedButton(
+                                onClick = {
+                                    profile?.userId?.let {
+                                        navController.navigate("${com.example.pmadvanced.presenter.ui.main.MainActivityNavigationNames.MAP_SCREEN}/$it")
+                                    }
+                                },
+                                enabled = profile?.userId != null,
+                                modifier = Modifier.width(150.dp).height(32.dp),
+                                shape = RoundedCornerShape(15.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = White),
+                                border = BorderStroke(1.dp, White),
+                                contentPadding = PaddingValues(horizontal = 10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Map,
+                                    contentDescription = "View on map",
+                                    modifier = Modifier.size(14.dp)
                                 )
-                                action(MainScreenAction.SelectUser(target))
-                                navController.navigate(com.example.pmadvanced.presenter.ui.main.MainActivityNavigationNames.CHAT_SCREEN)
-                            },
-                            enabled = profile?.userId != null,
-                            modifier = Modifier.height(32.dp),
-                            shape = RoundedCornerShape(15.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = White,
-                                contentColor = Color.Black
-                            ),
-                            contentPadding = PaddingValues(horizontal = 12.dp)
-                        ) { Text("Start message", fontSize = 12.sp) }
+                                WidthSpacer(width = 4.dp)
+                                Text("View on map", fontSize = 12.sp, maxLines = 1)
+                            }
+                        }
                     }
                 }
             }

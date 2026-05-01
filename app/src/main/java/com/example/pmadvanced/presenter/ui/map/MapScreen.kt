@@ -25,10 +25,11 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pmadvanced.presenter.ui.komek.KomekViewModel
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun MapScreen() {
+fun MapScreen(focusUserId: Int? = null) {
     val mapViewModel: MapViewModel = viewModel()
     val komekViewModel: KomekViewModel = viewModel()
     val komekUiState by komekViewModel.uiState.collectAsState()
@@ -37,6 +38,7 @@ fun MapScreen() {
     val context = LocalContext.current
     val myLocation by mapViewModel.myLocation.collectAsState()
     val nearbyUsers by mapViewModel.nearbyUsers.collectAsState()
+    val focusedUser by mapViewModel.focusedUser.collectAsState()
     val isLoading by mapViewModel.isLoading.collectAsState()
 
     val locationPermission = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -69,8 +71,23 @@ fun MapScreen() {
 
     LaunchedEffect(myLocation) {
         myLocation?.let {
-            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(it, 14f))
+            if (focusUserId == null) {
+                cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(it, 14f))
+            }
             komekViewModel.loadNearbyRequests(it.latitude, it.longitude)
+        }
+    }
+
+    LaunchedEffect(focusUserId) {
+        focusUserId?.let { mapViewModel.focusUser(it) }
+    }
+
+    LaunchedEffect(focusedUser) {
+        focusedUser?.let { user ->
+            val position = LatLng(user.latitude, user.longitude)
+            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(position, 13f))
+            delay(250)
+            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(position, 17f))
         }
     }
 
@@ -103,6 +120,14 @@ fun MapScreen() {
                             title = user.username,
                             snippet = "${user.distanceKm} km away",
                             icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
+                        )
+                    }
+                    focusedUser?.let { user ->
+                        val pos = LatLng(user.latitude, user.longitude)
+                        Marker(
+                            state = MarkerState(position = pos),
+                            title = "Selected user",
+                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
                         )
                     }
                     komekUiState.nearbyRequests.forEach { nearby ->
