@@ -1,6 +1,6 @@
 package com.example.pmadvanced.presenter.ui.main.screen
 
-import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +38,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
@@ -47,47 +47,51 @@ import com.example.pmadvanced.data.model.MessageModel
 import com.example.pmadvanced.presenter.ui.main.MainActivityNavigationNames
 import com.example.pmadvanced.presenter.ui.main.event.MainScreenAction
 import com.example.pmadvanced.presenter.ui.main.event.MainScreenEvent
+import com.example.pmadvanced.presenter.ui.main.viewmodel.MainActivityViewModel
 import com.example.pmadvanced.presenter.ui.main.viewmodel.ProfileViewModel
 import com.example.pmadvanced.ui.theme.White
 import com.example.pmadvanced.ui.util.HeightSpacer
-import com.example.pmadvanced.ui.util.ImageCircle
 import com.example.pmadvanced.ui.util.WidthSpacer
-import com.example.pmadvanced.ui.util.formatTimestamp
 
 @Composable
 fun ChatScreen(
     navController: NavHostController,
     mainScreenEvent: State<MainScreenEvent>,
     action: (MainScreenAction) -> Unit,
-    profileViewModel: ProfileViewModel
+    profileViewModel: ProfileViewModel,
+    // Pass the viewModel so we can stop polling on back
+    mainActivityViewModel: MainActivityViewModel
 ) {
+    val messageText = remember { mutableStateOf("") }
 
-    val backDispatcher = LocalOnBackPressedDispatcherOwner.current
-
-    val messageText = remember {
-        mutableStateOf("")
+    // Stop message polling when the screen leaves composition
+    DisposableEffect(Unit) {
+        onDispose {
+            mainActivityViewModel.stopMessagePolling()
+        }
     }
 
+    // Also handle hardware back press
+    BackHandler {
+        mainActivityViewModel.stopMessagePolling()
+        navController.popBackStack()
+    }
 
-    Column (
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(color = Color.Black),
         verticalArrangement = Arrangement.SpaceBetween
-    ){
-        Column (
-            modifier = Modifier
-                .background(color = Color.Black)
-        ) {
-            Row (
+    ) {
+        Column(modifier = Modifier.background(color = Color.Black)) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 15.dp, horizontal = 20.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row (
-                    modifier = Modifier,
+                Row(
                     horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -96,7 +100,8 @@ fun ChatScreen(
                         contentDescription = "",
                         tint = White,
                         modifier = Modifier.clickable {
-                            backDispatcher?.onBackPressedDispatcher?.onBackPressed()
+                            mainActivityViewModel.stopMessagePolling()
+                            navController.popBackStack()
                         }
                     )
                     WidthSpacer()
@@ -112,60 +117,63 @@ fun ChatScreen(
                     ) {
                         val photo = mainScreenEvent.value.selectedUser?.profileImage
                         if (!photo.isNullOrBlank()) {
-                            AsyncImage(model = photo, contentDescription = "", contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize())
+                            AsyncImage(
+                                model = photo,
+                                contentDescription = "",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
                         } else {
-                            Box(modifier = Modifier.fillMaxSize().background(Color.DarkGray),
-                                contentAlignment = Alignment.Center) {
-                                Icon(painter = painterResource(R.drawable.person_icon), contentDescription = "", tint = White)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.DarkGray),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.person_icon),
+                                    contentDescription = "",
+                                    tint = White
+                                )
                             }
                         }
                     }
                     WidthSpacer(width = 15.dp)
-                    Text(text = mainScreenEvent.value.selectedUser?.userName ?: "", color = White, fontSize = 20.sp)
+                    Text(
+                        text = mainScreenEvent.value.selectedUser?.userName ?: "",
+                        color = White,
+                        fontSize = 20.sp
+                    )
                 }
-
                 Icon(
                     painter = painterResource(id = R.drawable.dot_menu_icon),
                     contentDescription = "",
                     tint = White
                 )
             }
-
-            HorizontalDivider(
-                thickness = 1.dp,
-                color = Color.Gray
-            )
+            HorizontalDivider(thickness = 1.dp, color = Color.Gray)
         }
 
+        // reverseLayout=true + ascending list = newest message shown at bottom ✓
         LazyColumn(
             reverseLayout = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            mainScreenEvent.value.messagesList?.forEach { item ->
-                if (item.senderId == mainScreenEvent.value.currentUser?.userId){
-                    item {
-                        SendChatItem(item)
-                    }
+            // Reverse the list for display so the newest item is index 0 for reverseLayout
+            val messages = mainScreenEvent.value.messagesList?.reversed() ?: emptyList()
+            messages.forEach { item ->
+                if (item.senderId == mainScreenEvent.value.currentUser?.userId) {
+                    item { SendChatItem(item) }
                 } else {
-                    item {
-                        ReceiveChatItem(item)
-                    }
+                    item { ReceiveChatItem(item) }
                 }
             }
         }
 
-        Column (
-            modifier = Modifier
-                .fillMaxWidth()
-        ){
-            HorizontalDivider(
-                thickness = 1.dp,
-                color = Color.Gray
-            )
-
+        Column(modifier = Modifier.fillMaxWidth()) {
+            HorizontalDivider(thickness = 1.dp, color = Color.Gray)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -175,9 +183,7 @@ fun ChatScreen(
             ) {
                 OutlinedTextField(
                     value = messageText.value,
-                    onValueChange = {
-                        messageText.value = it
-                    },
+                    onValueChange = { messageText.value = it },
                     colors = OutlinedTextFieldDefaults.colors(
                         unfocusedBorderColor = White,
                         focusedBorderColor = White,
@@ -185,29 +191,22 @@ fun ChatScreen(
                     ),
                     modifier = Modifier
                         .height(80.dp)
-                        .weight(1f)
-                    ,
+                        .weight(1f),
                     shape = RoundedCornerShape(25.dp),
-                    label = {
-                        Text(text = "Type message", color = Color.Gray)
-                    }
+                    label = { Text(text = "Type message", color = Color.Gray) }
                 )
-
                 WidthSpacer()
-
-                Button(onClick = {
-                    action(MainScreenAction.SendMessage(messageText.value){
-                        if (it){
-                            messageText.value = ""
-                        }
-                    })
-                },
+                Button(
+                    onClick = {
+                        action(MainScreenAction.SendMessage(messageText.value) { success ->
+                            if (success) messageText.value = ""
+                        })
+                    },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = White,
                         contentColor = Color.Black
                     ),
-                    modifier = Modifier
-                        .size(50.dp),
+                    modifier = Modifier.size(50.dp),
                     contentPadding = PaddingValues(10.dp),
                     shape = RoundedCornerShape(15.dp)
                 ) {
@@ -215,18 +214,12 @@ fun ChatScreen(
                         painter = painterResource(id = R.drawable.send_icon),
                         contentDescription = "",
                         tint = Color.Black,
-                        modifier = Modifier
-                            .fillMaxSize()
-                        )
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
-
             }
-
         }
-
     }
-
-
 }
 
 @Composable
@@ -235,32 +228,31 @@ fun SendChatItem(item: MessageModel) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 15.dp, vertical = 15.dp)
-    ) { constraints
-        
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth(fraction = 0.8f)
                 .align(Alignment.CenterEnd)
         ) {
-            Text(text = item.text?: "",
+            Text(
+                text = item.text ?: "",
                 color = Color.Black,
                 textAlign = TextAlign.End,
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(color = White, shape = RoundedCornerShape(10.dp))
                     .padding(vertical = 15.dp, horizontal = 10.dp)
-                )
+            )
             HeightSpacer(height = 5.dp)
-            Text(text = item.timeStamp?:"",
+            Text(
+                text = item.timeStamp ?: "",
                 color = Color.Gray,
                 fontSize = 8.sp,
                 textAlign = TextAlign.Start,
-                modifier = Modifier
-                    .padding(start = 5.dp)
-                )
+                modifier = Modifier.padding(start = 5.dp)
+            )
         }
-        
-    }   
+    }
 }
 
 @Composable
@@ -269,14 +261,14 @@ fun ReceiveChatItem(item: MessageModel) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 15.dp, vertical = 15.dp)
-    ) { constraints
-
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth(fraction = 0.8f)
                 .align(Alignment.CenterStart)
         ) {
-            Text(text = item.text?: "",
+            Text(
+                text = item.text ?: "",
                 color = Color.Black,
                 textAlign = TextAlign.Start,
                 modifier = Modifier
@@ -285,7 +277,8 @@ fun ReceiveChatItem(item: MessageModel) {
                     .padding(vertical = 15.dp, horizontal = 10.dp)
             )
             HeightSpacer(height = 5.dp)
-            Text(text = item.timeStamp?: "",
+            Text(
+                text = item.timeStamp ?: "",
                 color = Color.Gray,
                 fontSize = 8.sp,
                 textAlign = TextAlign.End,
@@ -294,6 +287,5 @@ fun ReceiveChatItem(item: MessageModel) {
                     .fillMaxWidth()
             )
         }
-
     }
 }

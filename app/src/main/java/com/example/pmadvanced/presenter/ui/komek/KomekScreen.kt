@@ -157,7 +157,8 @@ fun AllRequestsTab(
             Text("No open requests", color = Color.Gray)
         }
     } else {
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 50.dp)) {
             items(requests) { req ->
                 RequestCard(
                     request = req,
@@ -186,7 +187,8 @@ fun MyRequestsTab(
             Text("You have no requests", color = Color.Gray)
         }
     } else {
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 50.dp)) {
             items(requests) { req ->
                 RequestCard(
                     request = req,
