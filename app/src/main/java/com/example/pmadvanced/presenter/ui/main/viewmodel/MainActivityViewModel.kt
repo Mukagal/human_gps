@@ -29,7 +29,8 @@ import java.net.URL
 class MainActivityViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("auth", Context.MODE_PRIVATE)
-    private val token = prefs.getString("access_token", "") ?: ""
+    private var token = prefs.getString("access_token", "") ?: ""
+    private val refreshToken = prefs.getString("refresh_token", "") ?: ""
     private val currentUserId = prefs.getInt("user_id", 0)
 
     private val _snackBarState = MutableStateFlow(SnackBarState())
@@ -50,13 +51,31 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
 
 
     companion object {
-        private const val CONVERSATION_POLL_INTERVAL_MS = 10_000L // 10 seconds
-        private const val MESSAGE_POLL_INTERVAL_MS = 3_000L       // 3 seconds
+        private const val CONVERSATION_POLL_INTERVAL_MS = 10_000L
+        private const val MESSAGE_POLL_INTERVAL_MS = 3_000L
     }
+
 
     init {
         loadConversations()
         startConversationPolling()
+    }
+
+    private suspend fun refreshAndRetry(): Boolean {
+        if (refreshToken.isEmpty()) return false
+        return try {
+            val url = URL("$BASE_URL/refresh")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Authorization", "Bearer $refreshToken")
+
+            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                val json = JSONObject(conn.inputStream.bufferedReader().readText())
+                token = json.getString("access_token")
+                prefs.edit().putString("access_token", token).apply()
+                true
+            } else false
+        } catch (e: Exception) { false }
     }
 
     fun action(event: MainScreenAction) {
@@ -69,6 +88,8 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
             is MainScreenAction.SearchUsers -> searchUsers(event.query)
             is MainScreenAction.SendMessage -> sendMessage(event.message, event.callBack)
             is MainScreenAction.LoadConversations -> loadConversations()
+            is MainScreenAction.DeleteMessage -> deleteMessage(event.messageId)
+            is MainScreenAction.EditMessage -> editMessage(event.messageId, event.newContent)
         }
     }
 
@@ -97,8 +118,6 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
         messagePollingJob?.cancel()
         messagePollingJob = null
     }
-
-
 
     private fun loadConversations() {
         _isLoading.value = true
@@ -139,6 +158,15 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
         val conn = url.openConnection() as HttpURLConnection
         conn.setRequestProperty("Authorization", "Bearer $token")
 
+        if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            val refreshed = kotlinx.coroutines.runBlocking { refreshAndRetry() }
+            if (!refreshed) {
+                _snackBarState.value = _snackBarState.value.copy(show = true, isError = true, message = "Session expired. Please log in again.")
+                return null
+            }
+            return fetchConversations()
+        }
+
         if (conn.responseCode != HttpURLConnection.HTTP_OK) return null
 
         val response = conn.inputStream.bufferedReader().readText()
@@ -153,8 +181,6 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
             val otherUserId = if (user1Id == currentUserId) user2Id else user1Id
 
             val otherUser = fetchUser(otherUserId)
-            // FIX: fetch ALL messages and take the last one, because ?limit=1 returns
-            // the oldest message (ascending default order) on most backends.
             val lastMsg = fetchLastMessage(convId)
 
             conversations.add(
@@ -166,9 +192,6 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
                 )
             )
         }
-
-        // FIX: sort by lastMessageTime descending so newest conversation is at the top.
-        // Timestamps are ISO-8601 strings so lexicographic sort works correctly.
         conversations.sortByDescending { it.lastMessageTime ?: "" }
 
         return conversations
@@ -210,7 +233,14 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
         val url = URL("$BASE_URL/conversations/$conversationId/messages")
         val conn = url.openConnection() as HttpURLConnection
         conn.setRequestProperty("Authorization", "Bearer $token")
-
+        if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            val refreshed = kotlinx.coroutines.runBlocking { refreshAndRetry() }
+            if (!refreshed) {
+                _snackBarState.value = _snackBarState.value.copy(show = true, isError = true, message = "Session expired. Please log in again.")
+                return emptyList()
+            }
+            return fetchMessages(conversationId)
+        }
         if (conn.responseCode != HttpURLConnection.HTTP_OK) return emptyList()
 
         val arr = JSONArray(conn.inputStream.bufferedReader().readText())
@@ -226,7 +256,6 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
                 )
             )
         }
-        // Ensure ascending order by messageId in case the API is inconsistent
         messages.sortBy { it.messageId }
         return messages
     }
@@ -260,6 +289,15 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
             conn.setRequestProperty("Authorization", "Bearer $token")
 
             val responseCode = conn.responseCode
+
+            if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                val refreshed = kotlinx.coroutines.runBlocking { refreshAndRetry() }
+                if (!refreshed) {
+                    _snackBarState.value = _snackBarState.value.copy(show = true, isError = true, message = "Session expired. Please log in again.")
+                    return null
+                }
+                return fetchUser(userId)
+            }
 
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 val responseText = conn.inputStream.bufferedReader().readText()
@@ -312,7 +350,6 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    // ─── Conversations / send ────────────────────────────────────────────────────
 
     private fun createConversation(userModel: UserModel) {
         _isLoading.value = true
@@ -380,6 +417,60 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    private fun deleteMessage(messageId: Int) {
+        val convId = _mainScreenEvent.value.currentConversationId ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = URL("$BASE_URL/messages/$messageId")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "DELETE"
+                conn.setRequestProperty("Authorization", "Bearer $token")
+
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) deleteMessage(messageId)
+                    return@launch
+                }
+
+                if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                    val updated = (_mainScreenEvent.value.messagesList ?: emptyList())
+                        .filter { it.messageId != messageId }
+                    _mainScreenEvent.value = _mainScreenEvent.value.copy(messagesList = updated)
+                }
+            } catch (e: Exception) {
+                Log.e("MainVM", "deleteMessage error", e)
+            }
+        }
+    }
+
+    private fun editMessage(messageId: Int, newContent: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = URL("$BASE_URL/messages/$messageId")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "PATCH"
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+
+                val body = JSONObject().apply { put("content", newContent) }.toString()
+                OutputStreamWriter(conn.outputStream).use { it.write(body) }
+
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) editMessage(messageId, newContent)
+                    return@launch
+                }
+
+                if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                    val updated = (_mainScreenEvent.value.messagesList ?: emptyList()).map {
+                        if (it.messageId == messageId) it.copy(text = newContent) else it
+                    }
+                    _mainScreenEvent.value = _mainScreenEvent.value.copy(messagesList = updated)
+                }
+            } catch (e: Exception) {
+                Log.e("MainVM", "editMessage error", e)
+            }
+        }
+    }
     override fun onCleared() {
         super.onCleared()
         conversationPollingJob?.cancel()

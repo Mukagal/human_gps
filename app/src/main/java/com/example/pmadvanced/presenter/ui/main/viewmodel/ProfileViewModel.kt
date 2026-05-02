@@ -26,7 +26,8 @@ import kotlinx.serialization.json.Json
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("auth", Context.MODE_PRIVATE)
-    val token = prefs.getString("access_token", "") ?: ""
+    var token = prefs.getString("access_token", "") ?: ""
+    private val refreshToken = prefs.getString("refresh_token", "") ?: ""
     val currentUserId = prefs.getInt("user_id", 0)
 
     private val _snackBarState = MutableStateFlow(SnackBarState())
@@ -50,6 +51,23 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _totalRatings = MutableStateFlow(0)
     val totalRatings: StateFlow<Int> = _totalRatings.asStateFlow()
 
+    private suspend fun refreshAndRetry(): Boolean {
+        if (refreshToken.isEmpty()) return false
+        return try {
+            val url = URL("$BASE_URL/refresh")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Authorization", "Bearer $refreshToken")
+
+            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                val json = JSONObject(conn.inputStream.bufferedReader().readText())
+                token = json.getString("access_token")
+                prefs.edit().putString("access_token", token).apply()
+                true
+            } else false
+        } catch (e: Exception) { false }
+    }
+
     fun loadProfile(userId: Int = currentUserId) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -57,6 +75,14 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.setRequestProperty("Authorization", "Bearer $token")
                 val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) {
+                        _snackBarState.value = SnackBarState(show = true, isError = true, message = "Session expired. Please log in again.")
+                        return@launch
+                    }
+                    loadProfile(userId)  // retry
+                    return@launch
+                }
                 val responseText = if (responseCode == HttpURLConnection.HTTP_OK)
                     conn.inputStream.bufferedReader().readText()
                 else conn.errorStream?.bufferedReader()?.readText() ?: ""
@@ -91,6 +117,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.setRequestProperty("Authorization", "Bearer $token")
                 val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) return@launch
+                    loadUserRating(userId)
+                    return@launch
+                }
                 if (responseCode == HttpURLConnection.HTTP_OK) {
                     val responseText = conn.inputStream.bufferedReader().readText()
                     val json = JSONObject(responseText)
@@ -123,6 +154,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     it.write(JSONObject().apply { put("username", newUsername) }.toString())
                 }
                 val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) {
+                        viewModelScope.launch(Dispatchers.Main) {
+                            _isLoading.value = false
+                            _snackBarState.value = SnackBarState(show = true, isError = true, message = "Session expired.")
+                        }
+                        return@launch
+                    }
+                    updateUsername(newUsername)
+                    return@launch
+                }
                 conn.inputStream.bufferedReader().readText()
 
                 viewModelScope.launch(Dispatchers.Main) {
@@ -158,6 +200,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 }
                 OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
                 val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) {
+                        viewModelScope.launch(Dispatchers.Main) {
+                            _isLoading.value = false
+                            _snackBarState.value = SnackBarState(show = true, isError = true, message = "Session expired.")
+                        }
+                        return@launch
+                    }
+                    updateProfessions(professions)
+                    return@launch
+                }
                 conn.inputStream.bufferedReader().readText()
 
                 viewModelScope.launch(Dispatchers.Main) {
@@ -199,6 +252,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     os.write("\r\n--$boundary--\r\n".toByteArray())
                 }
                 val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) {
+                        viewModelScope.launch(Dispatchers.Main) {
+                            _isLoading.value = false
+                            _snackBarState.value = SnackBarState(show = true, isError = true, message = "Session expired.")
+                        }
+                        return@launch
+                    }
+                    uploadProfileImage(context, imageUri)
+                    return@launch
+                }
                 conn.inputStream.bufferedReader().readText()
 
                 viewModelScope.launch(Dispatchers.Main) {
@@ -227,6 +291,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.setRequestProperty("Authorization", "Bearer $token")
                 val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) return@launch
+                    loadPosts(userId)
+                    return@launch
+                }
                 val responseText = if (responseCode == HttpURLConnection.HTTP_OK)
                     conn.inputStream.bufferedReader().readText() else "[]"
 
@@ -285,6 +354,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) return@launch
+                    createPostWithImage(content, imageUri, context)
+                    return@launch
+                }
                 conn.inputStream.bufferedReader().readText()
 
                 viewModelScope.launch(Dispatchers.Main) {
@@ -315,6 +389,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 conn.requestMethod = method
                 conn.setRequestProperty("Authorization", "Bearer $token")
                 conn.responseCode
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) toggleLike(post)
+                    return@launch
+                }
                 conn.inputStream.bufferedReader().readText()
 
                 viewModelScope.launch(Dispatchers.Main) {
@@ -340,6 +418,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.setRequestProperty("Authorization", "Bearer $token")
                 val responseCode = conn.responseCode
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) loadComments(postId)
+                    return@launch
+                }
                 val responseText = if (responseCode == HttpURLConnection.HTTP_OK)
                     conn.inputStream.bufferedReader().readText() else "[]"
 
@@ -377,6 +459,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     it.write(JSONObject().apply { put("content", content) }.toString())
                 }
                 val responseCode = conn.responseCode
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) addComment(postId, content)
+                    return@launch
+                }
                 conn.inputStream.bufferedReader().readText()
 
                 if (responseCode == HttpURLConnection.HTTP_CREATED || responseCode == HttpURLConnection.HTTP_OK) {
@@ -407,6 +493,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     it.write(JSONObject().apply { put("conversation_id", conversationId) }.toString())
                 }
                 val responseCode = conn.responseCode
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) sharePost(postId, conversationId)
+                    return@launch
+                }
                 conn.inputStream.bufferedReader().readText()
 
                 viewModelScope.launch(Dispatchers.Main) {

@@ -2,36 +2,19 @@ package com.example.pmadvanced.presenter.ui.main.screen
 
 import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,9 +36,9 @@ import com.example.pmadvanced.presenter.ui.main.formatMessageTime
 import com.example.pmadvanced.presenter.ui.main.viewmodel.MainActivityViewModel
 import com.example.pmadvanced.presenter.ui.main.viewmodel.ProfileViewModel
 import com.example.pmadvanced.ui.theme.White
-import com.example.pmadvanced.ui.util.HeightSpacer
 import com.example.pmadvanced.ui.util.WidthSpacer
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     navController: NavHostController,
@@ -66,15 +49,110 @@ fun ChatScreen(
 ) {
     val messageText = remember { mutableStateOf("") }
 
+    var selectedMessage by remember { mutableStateOf<MessageModel?>(null) }
+    var showOptionsSheet by remember { mutableStateOf(false) }
+
+    var showEditDialog by remember { mutableStateOf(false) }
+    var editText by remember { mutableStateOf("") }
+
     DisposableEffect(Unit) {
-        onDispose {
-            mainActivityViewModel.stopMessagePolling()
-        }
+        onDispose { mainActivityViewModel.stopMessagePolling() }
     }
 
     BackHandler {
         mainActivityViewModel.stopMessagePolling()
         navController.popBackStack()
+    }
+
+    if (showEditDialog && selectedMessage != null) {
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            containerColor = Color.DarkGray,
+            title = { Text("Edit Message", color = White) },
+            text = {
+                OutlinedTextField(
+                    value = editText,
+                    onValueChange = { editText = it },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedBorderColor = White,
+                        focusedBorderColor = White,
+                        focusedTextColor = White,
+                        unfocusedTextColor = White
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedMessage?.messageId?.let { id ->
+                        action(MainScreenAction.EditMessage(id, editText))
+                    }
+                    showEditDialog = false
+                    showOptionsSheet = false
+                }) { Text("Save", color = White) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    if (showOptionsSheet && selectedMessage != null) {
+        ModalBottomSheet(
+            onDismissRequest = { showOptionsSheet = false },
+            containerColor = Color(0xFF1C1C1E)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            editText = selectedMessage?.text ?: ""
+                            showEditDialog = true
+                        }
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.send_icon),
+                        contentDescription = "Edit",
+                        tint = White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    WidthSpacer(width = 16.dp)
+                    Text("Edit", color = White, fontSize = 16.sp)
+                }
+
+                HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            selectedMessage?.messageId?.let { id ->
+                                action(MainScreenAction.DeleteMessage(id))
+                            }
+                            showOptionsSheet = false
+                        }
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.person_icon),
+                        contentDescription = "Delete",
+                        tint = Color.Red,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    WidthSpacer(width = 16.dp)
+                    Text("Delete", color = Color.Red, fontSize = 16.sp)
+                }
+            }
+        }
     }
 
     Column(
@@ -96,7 +174,7 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "",
                         tint = White,
                         modifier = Modifier.clickable {
@@ -161,12 +239,23 @@ fun ChatScreen(
                 .weight(1f)
         ) {
             val messages = mainScreenEvent.value.messagesList?.reversed() ?: emptyList()
-
             val grouped = messages.groupBy { it.timeStamp?.substringBefore("T") }
+
             grouped.forEach { (day, dayMessages) ->
                 dayMessages.forEach { msg ->
-                    if (msg.senderId == mainScreenEvent.value.currentUser?.userId) item { SendChatItem(msg) }
-                    else item { ReceiveChatItem(msg) }
+                    if (msg.senderId == mainScreenEvent.value.currentUser?.userId) {
+                        item {
+                            SendChatItem(
+                                item = msg,
+                                onLongClick = {
+                                    selectedMessage = msg
+                                    showOptionsSheet = true
+                                }
+                            )
+                        }
+                    } else {
+                        item { ReceiveChatItem(msg) }
+                    }
                 }
                 item {
                     Text(
@@ -230,9 +319,10 @@ fun ChatScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
-fun SendChatItem(item: MessageModel) {
+fun SendChatItem(item: MessageModel, onLongClick: () -> Unit) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
@@ -242,6 +332,10 @@ fun SendChatItem(item: MessageModel) {
             modifier = Modifier
                 .fillMaxWidth(fraction = 0.8f)
                 .background(color = White, shape = RoundedCornerShape(10.dp))
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = onLongClick
+                )
                 .padding(vertical = 10.dp, horizontal = 10.dp)
                 .align(Alignment.CenterEnd)
         ) {

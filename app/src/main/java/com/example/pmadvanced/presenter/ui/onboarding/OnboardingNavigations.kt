@@ -38,7 +38,7 @@ object OnboardingNavigationObject {
 @Composable
 fun OnboardingNavigation(
     onboardingViewModel: OnboardingViewModel,
-    onLoginSuccess: (token: String, userId: Int) -> Unit
+    onLoginSuccess: (token: String, refreshToken: String, userId: Int) -> Unit
 ) {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
@@ -64,6 +64,7 @@ fun OnboardingNavigation(
                             if (status) {
                                 onLoginSuccess(
                                     onboardingViewModel.accessToken,
+                                    onboardingViewModel.refreshToken,
                                     onboardingViewModel.currentUserId
                                 )
                             }

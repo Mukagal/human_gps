@@ -37,8 +37,8 @@ data class FocusedMapUser(
 class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("auth", Context.MODE_PRIVATE)
-    private val token = prefs.getString("access_token", "") ?: ""
-
+    private var token = prefs.getString("access_token", "") ?: ""
+    private val refreshToken = prefs.getString("refresh_token", "") ?: ""
     private val _myLocation = MutableStateFlow<LatLng?>(null)
     val myLocation: StateFlow<LatLng?> = _myLocation
 
@@ -53,6 +53,21 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val _nearbyRequests = MutableStateFlow<List<NearbyRequest>>(emptyList())
     val nearbyRequests: StateFlow<List<NearbyRequest>> = _nearbyRequests
 
+    private suspend fun refreshAndRetry(): Boolean {
+        if (refreshToken.isEmpty()) return false
+        return try {
+            val url = URL("$BASE_URL/refresh")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Authorization", "Bearer $refreshToken")
+            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                val json = JSONObject(conn.inputStream.bufferedReader().readText())
+                token = json.getString("access_token")
+                prefs.edit().putString("access_token", token).apply()
+                true
+            } else false
+        } catch (e: Exception) { false }
+    }
     fun focusUser(userId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             val location = fetchUserProfile(userId)
@@ -86,6 +101,11 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                     put("longitude", lng)
                 }.toString()
                 OutputStreamWriter(conn.outputStream).use { it.write(body) }
+                val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) updateLocationOnServer(lat, lng)
+                    return@launch
+                }
                 conn.responseCode 
             } catch (e: Exception) {
                 Log.e("MapVM", "updateLocation error", e)
@@ -100,6 +120,11 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 val url = URL("$BASE_URL/users/nearby?latitude=$lat&longitude=$lng&radius_km=$radiusKm")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.setRequestProperty("Authorization", "Bearer $token")
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) return@launch
+                    loadNearbyUsers(lat, lng, radiusKm)
+                    return@launch
+                }
 
                 if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                     val arr = JSONArray(conn.inputStream.bufferedReader().readText())
@@ -134,6 +159,11 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             val url = URL("$BASE_URL/users/$userId/location")
             val conn = url.openConnection() as HttpURLConnection
             conn.setRequestProperty("Authorization", "Bearer $token")
+            if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                val refreshed = kotlinx.coroutines.runBlocking { refreshAndRetry() }
+                if (!refreshed) return null
+                return fetchUserProfile(userId)
+            }
             if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                 val json = JSONObject(conn.inputStream.bufferedReader().readText())
                 Pair(json.getDouble("latitude"), json.getDouble("longitude"))

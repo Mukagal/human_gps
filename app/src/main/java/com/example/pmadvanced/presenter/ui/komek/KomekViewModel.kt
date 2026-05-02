@@ -23,12 +23,29 @@ import com.example.pmadvanced.data.model.NearbyRequest
 class KomekViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("auth", Context.MODE_PRIVATE)
-    private val token = prefs.getString("access_token", "") ?: ""
 
+    private var token = prefs.getString("access_token", "") ?: ""
+    private val refreshToken = prefs.getString("refresh_token", "") ?: ""
     private val _uiState = MutableStateFlow(KomekUiState())
     val uiState: StateFlow<KomekUiState> = _uiState
 
     init { loadOpenRequests() }
+
+    private suspend fun refreshAndRetry(): Boolean {
+        if (refreshToken.isEmpty()) return false
+        return try {
+            val url = URL("$BASE_URL/refresh")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Authorization", "Bearer $refreshToken")
+            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                val json = JSONObject(conn.inputStream.bufferedReader().readText())
+                token = json.getString("access_token")
+                prefs.edit().putString("access_token", token).apply()
+                true
+            } else false
+        } catch (e: Exception) { false }
+    }
 
     fun loadOpenRequests() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -37,6 +54,11 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
                 val url = URL("$BASE_URL/requests")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.setRequestProperty("Authorization", "Bearer $token")
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) return@launch
+                    loadOpenRequests()
+                    return@launch
+                }
                 if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                     val arr = JSONArray(conn.inputStream.bufferedReader().readText())
                     _uiState.value = _uiState.value.copy(openRequests = parseRequests(arr))
@@ -55,6 +77,10 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
                 val url = URL("$BASE_URL/requests/me")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.setRequestProperty("Authorization", "Bearer $token")
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) loadMyRequests()
+                    return@launch
+                }
                 if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                     val arr = JSONArray(conn.inputStream.bufferedReader().readText())
                     _uiState.value = _uiState.value.copy(myRequests = parseRequests(arr))
@@ -69,6 +95,10 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
                 val url = URL("$BASE_URL/requests/nearby?latitude=$lat&longitude=$lng&radius_km=$radiusKm")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.setRequestProperty("Authorization", "Bearer $token")
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) loadNearbyRequests(lat, lng)
+                    return@launch
+                }
                 if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                     val arr = JSONArray(conn.inputStream.bufferedReader().readText())
                     val list = mutableListOf<NearbyRequest>()
@@ -106,7 +136,16 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
                     put("expires_in_days", expiresInDays)
                 }.toString()
                 OutputStreamWriter(conn.outputStream).use { it.write(body) }
-                if (conn.responseCode == HttpURLConnection.HTTP_CREATED) {
+                val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) {
+                        _uiState.value = _uiState.value.copy(error = "Session expired. Please log in again.")
+                        return@launch
+                    }
+                    createRequest(title, description, category, expiresInDays)
+                    return@launch
+                }
+                if (responseCode == HttpURLConnection.HTTP_CREATED) {
                     _uiState.value = _uiState.value.copy(successMessage = "Request created!")
                     loadOpenRequests()
                     loadMyRequests()
@@ -130,6 +169,15 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
                 conn.doOutput = true
                 val body = JSONObject().apply { put("message", message ?: "") }.toString()
                 OutputStreamWriter(conn.outputStream).use { it.write(body) }
+                val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) {
+                        _uiState.value = _uiState.value.copy(error = "Session expired. Please log in again.")
+                        return@launch
+                    }
+                    applyToRequest(requestId, message)
+                    return@launch
+                }
                 if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                     _uiState.value = _uiState.value.copy(successMessage = "Applied successfully!")
                     loadOpenRequests()
@@ -147,6 +195,10 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "DELETE"
                 conn.setRequestProperty("Authorization", "Bearer $token")
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) cancelRequest(requestId)
+                    return@launch
+                }
                 conn.responseCode
                 loadMyRequests()
             } catch (e: Exception) { Log.e("KomekVM", "cancelRequest", e) }
@@ -160,6 +212,10 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Authorization", "Bearer $token")
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) acceptApplication(requestId, applicationId)
+                    return@launch
+                }
                 conn.responseCode
                 loadMyRequests()
             } catch (e: Exception) { Log.e("KomekVM", "acceptApplication", e) }
@@ -173,6 +229,10 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Authorization", "Bearer $token")
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) rejectApplication(requestId, applicationId)
+                    return@launch
+                }
                 conn.responseCode
                 loadMyRequests()
             } catch (e: Exception) { Log.e("KomekVM", "rejectApplication", e) }
@@ -221,6 +281,10 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Authorization", "Bearer $token")
+                if (conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (refreshAndRetry()) completeRequest(requestId)
+                    return@launch
+                }
                 if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                     _uiState.value = _uiState.value.copy(successMessage = "Request marked as completed!")
                     loadMyRequests()
@@ -245,7 +309,16 @@ class KomekViewModel(application: Application) : AndroidViewModel(application) {
                     put("comment", comment ?: "")
                 }.toString()
                 OutputStreamWriter(conn.outputStream).use { it.write(body) }
-                if (conn.responseCode == HttpURLConnection.HTTP_CREATED) {
+                val responseCode = conn.responseCode
+                if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    if (!refreshAndRetry()) {
+                        _uiState.value = _uiState.value.copy(error = "Session expired.")
+                        return@launch
+                    }
+                    submitRating(targetUserId, requestId, rating, comment)
+                    return@launch
+                }
+                if (responseCode == HttpURLConnection.HTTP_CREATED) {
                     _uiState.value = _uiState.value.copy(successMessage = "Rating submitted!")
                 }
             } catch (e: Exception) {

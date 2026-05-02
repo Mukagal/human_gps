@@ -25,9 +25,10 @@ class OnboardingActivity : ComponentActivity() {
         }
 
         setContent {
-            OnboardingNavigation(onboardingViewModel) { token, userId ->
+            OnboardingNavigation(onboardingViewModel) { token, refreshToken, userId ->
                 prefs.edit()
                     .putString("access_token", token)
+                    .putString("refresh_token", refreshToken)  // ADD THIS
                     .putInt("user_id", userId)
                     .apply()
             }

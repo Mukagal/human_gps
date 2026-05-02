@@ -8,4 +8,6 @@ sealed interface MainScreenAction {
     data class SearchUsers(val query: String) : MainScreenAction
     data class SendMessage(val message: String, val callBack: (status: Boolean) -> Unit) : MainScreenAction
     object LoadConversations : MainScreenAction
+    data class DeleteMessage(val messageId: Int) : MainScreenAction
+    data class EditMessage(val messageId: Int, val newContent: String) : MainScreenAction
 }

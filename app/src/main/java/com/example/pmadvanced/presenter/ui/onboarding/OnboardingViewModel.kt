@@ -25,6 +25,7 @@ class OnboardingViewModel : ViewModel() {
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     var accessToken: String = ""
+    var refreshToken: String = ""
     var currentUserId: Int = 0
 
     var userModel = UserModel()
@@ -65,6 +66,7 @@ class OnboardingViewModel : ViewModel() {
                     if (responseCode == HttpURLConnection.HTTP_OK) {
                         val json = JSONObject(responseText)
                         accessToken = json.getString("access_token")
+                        refreshToken = json.getString("refresh_token")
                         currentUserId = json.getJSONObject("user").getInt("id")
                         _isLoading.value = false
                         status(true)
