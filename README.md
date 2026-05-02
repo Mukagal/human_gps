@@ -175,3 +175,9 @@ The backend is deployed on **Render** using two services from the same GitHub re
   - Start: `python -m celery -A src.celery worker --loglevel=INFO --pool=solo`
 
 External services: **Neon DB** (PostgreSQL) + **Redis Labs** (Redis)
+
+## Team Members
+- Kanalbekov Kuanysh 230103101
+- Kultayev Agadil 203103368
+- Seidaly Burkit 230103108
+- Amankossov Mukagali 230103162
