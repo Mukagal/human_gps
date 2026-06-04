@@ -3,6 +3,7 @@ package com.example.pmadvanced.data.model
 data class PostModel(
     val id: Int = 0,
     val authorId: Int = 0,
+    val authorName: String? = null,
     val content: String = "",
     val imagePath: String? = null,
     val createdAt: String? = null,

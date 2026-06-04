@@ -22,6 +22,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
@@ -56,6 +57,10 @@ fun MainScreen(
     onRefresh: () -> Unit,
     profileViewModel: ProfileViewModel
 ) {
+    LaunchedEffect(Unit) {
+        profileViewModel.loadOwnProfile()
+    }
+    val ownProfile = profileViewModel.ownProfile.collectAsState()
 
     BoxWithConstraints(
         modifier = Modifier
@@ -88,7 +93,7 @@ fun MainScreen(
                         .clip(CircleShape)
                         .clickable { navController.navigate(MainActivityNavigationNames.PROFILE_SCREEN) }
                 ) {
-                    val myPhoto = profileViewModel.profile.collectAsState().value?.profileImage
+                    val myPhoto = ownProfile.value?.profileImage
                     if (!myPhoto.isNullOrBlank()) {
                         AsyncImage(model = myPhoto, contentDescription = "", contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize())

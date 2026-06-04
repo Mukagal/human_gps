@@ -250,11 +250,19 @@ fun ChatScreen(
                                 onLongClick = {
                                     selectedMessage = msg
                                     showOptionsSheet = true
-                                }
+                                },
+                                profileViewModel = profileViewModel,
+                                mainScreenEvent = mainScreenEvent,
+                                navController = navController
                             )
                         }
                     } else {
-                        item { ReceiveChatItem(msg) }
+                        item { ReceiveChatItem(
+                            item = msg,
+                            profileViewModel = profileViewModel,
+                            mainScreenEvent = mainScreenEvent,
+                            navController = navController)
+                        }
                     }
                 }
                 item {
@@ -322,7 +330,13 @@ fun ChatScreen(
 @OptIn(ExperimentalFoundationApi::class)
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
-fun SendChatItem(item: MessageModel, onLongClick: () -> Unit) {
+fun SendChatItem(
+    item: MessageModel,
+    onLongClick: () -> Unit,
+    profileViewModel: ProfileViewModel,
+    mainScreenEvent: State<MainScreenEvent>,
+    navController: NavHostController
+) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
@@ -339,7 +353,23 @@ fun SendChatItem(item: MessageModel, onLongClick: () -> Unit) {
                 .padding(vertical = 10.dp, horizontal = 10.dp)
                 .align(Alignment.CenterEnd)
         ) {
-            Text(text = item.text ?: "", color = Color.Black, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+            val text = item.text ?: ""
+            val sharedPostId = remember(text) {
+                if (text.startsWith("[shared_post:")) {
+                    text.removePrefix("[shared_post:").substringBefore("]").toIntOrNull()
+                } else null
+            }
+
+            if (sharedPostId != null) {
+                SharedPostCard(
+                    postId = sharedPostId,
+                    profileViewModel = profileViewModel,
+                    mainScreenEvent = mainScreenEvent,
+                    navController = navController
+                )
+            } else {
+                Text(text = item.text ?: "", color = Color.Black, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+            }
             Text(
                 text = formatMessageTime(item.timeStamp ?: ""),
                 color = Color.DarkGray,
@@ -353,7 +383,12 @@ fun SendChatItem(item: MessageModel, onLongClick: () -> Unit) {
 
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
-fun ReceiveChatItem(item: MessageModel) {
+fun ReceiveChatItem(
+    item: MessageModel,
+    profileViewModel: ProfileViewModel,
+    mainScreenEvent: State<MainScreenEvent>,
+    navController: NavHostController
+) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
@@ -365,7 +400,23 @@ fun ReceiveChatItem(item: MessageModel) {
                 .background(color = White, shape = RoundedCornerShape(10.dp))
                 .padding(vertical = 10.dp, horizontal = 10.dp)
         ) {
-            Text(text = item.text ?: "", color = Color.Black, textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth())
+            val text = item.text ?: ""
+            val sharedPostId = remember(text) {
+                if (text.startsWith("[shared_post:")) {
+                    text.removePrefix("[shared_post:").substringBefore("]").toIntOrNull()
+                } else null
+            }
+
+            if (sharedPostId != null) {
+                SharedPostCard(
+                    postId = sharedPostId,
+                    profileViewModel = profileViewModel,
+                    mainScreenEvent = mainScreenEvent,
+                    navController = navController
+                )
+            } else {
+                Text(text = item.text ?: "", color = Color.Black, textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth())
+            }
             Text(
                 text = formatMessageTime(item.timeStamp ?: ""),
                 color = Color.DarkGray,

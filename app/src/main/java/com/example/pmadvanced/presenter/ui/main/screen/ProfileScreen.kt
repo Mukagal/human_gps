@@ -36,6 +36,7 @@ import coil.compose.AsyncImage
 import com.example.pmadvanced.R
 import com.example.pmadvanced.data.model.PostModel
 import com.example.pmadvanced.data.model.UserModel
+import com.example.pmadvanced.presenter.ui.main.MainActivityNavigationNames
 import com.example.pmadvanced.presenter.ui.onboarding.OnboardingActivity
 import com.example.pmadvanced.presenter.ui.main.viewmodel.ProfileViewModel
 import com.example.pmadvanced.ui.theme.Gray
@@ -653,5 +654,219 @@ fun PostCard(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SharedPostCard(
+    postId: Int,
+    profileViewModel: ProfileViewModel,
+    mainScreenEvent: State<MainScreenEvent>,
+    navController: NavController
+) {
+    var post by remember { mutableStateOf<PostModel?>(null) }
+    var selectedPostForComments by remember { mutableStateOf<PostModel?>(null) }
+    var selectedPostForShare by remember { mutableStateOf<PostModel?>(null) }
+    var commentText by remember { mutableStateOf("") }
+    val comments by profileViewModel.comments.collectAsState()
+
+    LaunchedEffect(postId) {
+        profileViewModel.fetchPostById(postId) { post = it }
+    }
+
+    selectedPostForComments?.let { p ->
+        ModalBottomSheet(
+            onDismissRequest = { selectedPostForComments = null },
+            containerColor = Color(0xFF1A1A1A)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Comments", color = White, fontSize = 18.sp)
+                HeightSpacer(height = 8.dp)
+                LazyColumn(modifier = Modifier.weight(1f, fill = false).heightIn(max = 300.dp)) {
+                    items(comments) { comment ->
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                            Box(
+                                modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.DarkGray),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = comment.authorName?.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                    color = White, fontSize = 10.sp
+                                )
+                            }
+                            WidthSpacer(width = 8.dp)
+                            Column {
+                                Text(text = comment.authorName ?: "User", color = Color.Gray, fontSize = 11.sp)
+                                Text(text = comment.content, color = White, fontSize = 14.sp)
+                            }
+                        }
+                        HorizontalDivider(color = Color.DarkGray, thickness = 0.5.dp)
+                    }
+                }
+                HeightSpacer(height = 8.dp)
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = commentText,
+                        onValueChange = { commentText = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("Add a comment…", color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = White, unfocusedBorderColor = Color.Gray,
+                            focusedTextColor = White, unfocusedTextColor = White
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    WidthSpacer(width = 8.dp)
+                    Button(
+                        onClick = {
+                            if (commentText.isNotBlank()) {
+                                profileViewModel.addComment(p.id, commentText)
+                                commentText = ""
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = White, contentColor = Color.Black),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) { Text("Post") }
+                }
+                HeightSpacer(height = 16.dp)
+            }
+        }
+    }
+
+    selectedPostForShare?.let { p ->
+        AlertDialog(
+            onDismissRequest = { selectedPostForShare = null },
+            title = { Text("Share to conversation") },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                    items(mainScreenEvent.value.conversationList ?: emptyList()) { conv ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    conv.conversationId?.let { profileViewModel.sharePost(p.id, it) }
+                                    selectedPostForShare = null
+                                }
+                                .padding(vertical = 10.dp)
+                        ) {
+                            Text(text = conv.otherUser?.userName ?: "Unknown", color = White)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { selectedPostForShare = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    post?.let { p ->
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .clickable {
+                    p.authorId?.let { navController.navigate("${MainActivityNavigationNames.PROFILE_SCREEN}/$it") }
+                },
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, Color.DarkGray)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier.size(28.dp).clip(CircleShape).background(Color.DarkGray),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = p.authorName?.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                            color = White, fontSize = 10.sp
+                        )
+                    }
+                    WidthSpacer(width = 8.dp)
+                    Text(text = p.authorName?: "User: ${p.authorId}", color = White, fontSize = 13.sp)
+                }
+
+                HeightSpacer(height = 8.dp)
+                Text(text = p.content, color = White, fontSize = 14.sp)
+
+                p.imagePath?.let {
+                    HeightSpacer(height = 8.dp)
+                    AsyncImage(
+                        model = it,
+                        contentDescription = "Post image",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                    )
+                }
+
+                HeightSpacer(height = 10.dp)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { profileViewModel.toggleLike(p) }
+                    ) {
+                        Icon(
+                            imageVector = if (p.likedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = "Like",
+                            tint = if (p.likedByMe) Color.Red else Color.Gray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        WidthSpacer(width = 4.dp)
+                        Text(text = "${p.likeCount}", color = Color.Gray, fontSize = 12.sp)
+                    }
+                    WidthSpacer(width = 20.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
+                            profileViewModel.loadComments(p.id)
+                            selectedPostForComments = p
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ChatBubbleOutline,
+                            contentDescription = "Comment",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        WidthSpacer(width = 4.dp)
+                        Text(text = "${p.commentCount}", color = Color.Gray, fontSize = 12.sp)
+                    }
+                    WidthSpacer(width = 20.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { selectedPostForShare = p }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Share,
+                            contentDescription = "Share",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        WidthSpacer(width = 4.dp)
+                        Text(text = "${p.shareCount}", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+    } ?: Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .background(Color(0xFF1A1A1A), RoundedCornerShape(12.dp))
+            .padding(12.dp)
+    ) {
+        Text(text = "📎 Shared post", color = Color.Gray, fontSize = 13.sp)
     }
 }
